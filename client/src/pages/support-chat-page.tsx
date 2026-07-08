@@ -78,6 +78,18 @@ export default function SupportChatPage() {
   const [isClearingChat, setIsClearingChat] = useState(false);
   const [isClearingMedia, setIsClearingMedia] = useState(false);
 
+  // Auto-select chat from URL query param ?chat=<telegramId> (set by notification click)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const chatParam = params.get("chat");
+    if (chatParam) {
+      setSelectedChatId(decodeURIComponent(chatParam));
+      // Clean the URL param without reloading
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, []);
+
   // States for customizing fast replies
   const [isEditingTemplates, setIsEditingTemplates] = useState(false);
   const [editingList, setEditingList] = useState<string[]>([]);

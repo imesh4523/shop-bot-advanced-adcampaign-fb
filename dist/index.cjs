@@ -96574,7 +96574,8 @@ ${extraInstructions}
       io2.emit("admin_notification", {
         title: "Human Agent Requested",
         description: `@${username || telegramId} requested human assistance.`,
-        type: "support"
+        type: "support",
+        telegramId
       });
       sendAdminPushNotification(
         "Human Agent Requested",
@@ -96614,7 +96615,8 @@ ${extraInstructions}
       io2.emit("admin_notification", {
         title: "New Support Message",
         description: `@${username || telegramId}: ${finalMessage.substring(0, 40)}`,
-        type: "support"
+        type: "support",
+        telegramId
       });
       sendAdminPushNotification(
         "New Support Message",

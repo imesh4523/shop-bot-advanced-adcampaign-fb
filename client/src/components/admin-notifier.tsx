@@ -31,12 +31,33 @@ export function AdminNotifier() {
 
     // 1. Socket.io for Real-time Toast/Sound/Native Notification when dashboard is open
     const socket = io();
-    socket.on('admin_notification', (notification: { title: string; message?: string; description?: string }) => {
+    socket.on('admin_notification', (notification: { title: string; message?: string; description?: string; type?: string; telegramId?: string }) => {
       const body = notification.description || notification.message || '';
+      const isSupport = notification.type === 'support' && notification.telegramId;
+
+      // Navigate to specific chat when notification is clicked
+      const goToChat = () => {
+        if (isSupport && notification.telegramId) {
+          window.location.href = `/main-admin/support?chat=${encodeURIComponent(notification.telegramId)}`;
+        }
+      };
+
       toast({
         title: notification.title,
-        description: body,
-        duration: 10000,
+        description: isSupport
+          ? (
+            <div className="flex flex-col gap-2">
+              <span>{body}</span>
+              <button
+                onClick={goToChat}
+                className="mt-1 self-start px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-colors"
+              >
+                📨 View Chat →
+              </button>
+            </div>
+          ) as any
+          : body,
+        duration: 12000,
       });
 
       const audio = new Audio(NOTIFICATION_SOUND_URL);
@@ -45,10 +66,17 @@ export function AdminNotifier() {
       // Show native browser notification if tab is in background or minimized
       if (window.Notification && window.Notification.permission === 'granted') {
         try {
-          new window.Notification(notification.title, {
+          const nativeNotif = new window.Notification(notification.title, {
             body,
             icon: '/favicon.ico'
           });
+          // Clicking native notification also navigates to the chat
+          if (isSupport) {
+            nativeNotif.onclick = () => {
+              window.focus();
+              goToChat();
+            };
+          }
         } catch (e) {
           console.error('Failed to trigger native notification:', e);
         }
