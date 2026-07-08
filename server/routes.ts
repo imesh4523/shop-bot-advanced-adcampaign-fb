@@ -1355,45 +1355,60 @@ export async function registerRoutes(
   // Support Chat File Upload Endpoint
   // Multer errors (e.g., file too large) are handled via inline error middleware
   const uploadMiddleware = upload.single('file');
-  app.post("/api/support/upload", verifySupportChatAuth, (req: any, res: any, next: any) => {
-    uploadMiddleware(req, res, (err: any) => {
-      if (err) {
-        if (err.code === 'LIMIT_FILE_SIZE') {
-          return res.status(413).json({ message: "File is too large. Maximum file size is 10MB." });
+  app.post("/api/support/upload", 
+    (req: any, res: any, next: any) => {
+      console.log(`[Upload] 1. Initializing upload stream parser. Filename: ${req.headers['x-file-name'] || 'unknown'}`);
+      uploadMiddleware(req, res, (err: any) => {
+        if (err) {
+          console.error("[Upload] Multer stream parsing error:", err);
+          if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(413).json({ message: "File is too large. Maximum file size is 10MB." });
+          }
+          return res.status(400).json({ message: err.message || "File upload error." });
         }
-        return res.status(400).json({ message: err.message || "File upload error." });
-      }
-      next();
-    });
-  }, async (req: any, res: any) => {
-    if (!req.file) {
-      return res.status(400).json({ message: "No file uploaded" });
-    }
-    // Block dangerous executable extensions for security
-    const blockedExtensions = ['.exe', '.bat', '.cmd', '.sh', '.js', '.vbs', '.scr', '.msi', '.com', '.lnk', '.jar'];
-    const fileExt = path.extname(req.file.originalname).toLowerCase();
-    if (blockedExtensions.includes(fileExt) || req.file.mimetype.includes("executable")) {
-      return res.status(400).json({ message: "This file type is not allowed for security reasons." });
-    }
-    try {
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-      const filename = uniqueSuffix + path.extname(req.file.originalname);
-      const base64Data = req.file.buffer.toString('base64');
-      await storage.saveUploadedFile(filename, req.file.mimetype, base64Data);
-
-      // Use x-forwarded-proto for correct https on Render/DO reverse proxy
-      const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol;
-      const fileUrl = `${proto}://${req.get('host')}/uploads/${filename}`;
-      res.json({
-        fileUrl,
-        filename: req.file.originalname,
-        mimeType: req.file.mimetype
+        console.log(`[Upload] 2. Multer parsing successful. File size: ${req.file ? req.file.size : 0} bytes`);
+        next();
       });
-    } catch (err) {
-      console.error("Support file upload failed:", err);
-      res.status(500).json({ message: "Internal server error" });
+    }, 
+    verifySupportChatAuth, 
+    async (req: any, res: any) => {
+      console.log("[Upload] 3. Entering database persistence handler");
+      if (!req.file) {
+        console.error("[Upload] Error: No file found in request object");
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+      // Block dangerous executable extensions for security
+      const blockedExtensions = ['.exe', '.bat', '.cmd', '.sh', '.js', '.vbs', '.scr', '.msi', '.com', '.lnk', '.jar'];
+      const fileExt = path.extname(req.file.originalname).toLowerCase();
+      if (blockedExtensions.includes(fileExt) || req.file.mimetype.includes("executable")) {
+        console.error(`[Upload] Blocked security-sensitive file type: ${fileExt}`);
+        return res.status(400).json({ message: "This file type is not allowed for security reasons." });
+      }
+      try {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        const filename = uniqueSuffix + path.extname(req.file.originalname);
+        const base64Data = req.file.buffer.toString('base64');
+        
+        console.log(`[Upload] 4. Persisting ${filename} to postgres database...`);
+        await storage.saveUploadedFile(filename, req.file.mimetype, base64Data);
+        console.log(`[Upload] 5. Persisted successfully`);
+
+        // Use x-forwarded-proto for correct https on Render/DO reverse proxy
+        const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol;
+        const fileUrl = `${proto}://${req.get('host')}/uploads/${filename}`;
+        
+        console.log(`[Upload] 6. Returning file URL: ${fileUrl}`);
+        res.json({
+          fileUrl,
+          filename: req.file.originalname,
+          mimeType: req.file.mimetype
+        });
+      } catch (err) {
+        console.error("[Upload] Database persistence failed:", err);
+        res.status(500).json({ message: "Internal server error" });
+      }
     }
-  });
+  );
 
   // Mini App Live Support Endpoints
   app.post("/api/mini/support/request", verifyMiniAppAuth, async (req, res) => {
