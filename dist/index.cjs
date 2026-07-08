@@ -96533,7 +96533,7 @@ ${extraInstructions}
     }
   });
   const verifySupportChatAuth = async (req, res, next) => {
-    if (req.isAuthenticated()) {
+    if (req.session?.userId) {
       return next();
     }
     const initData = req.headers["x-telegram-init-data"];

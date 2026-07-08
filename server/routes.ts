@@ -1308,7 +1308,7 @@ export async function registerRoutes(
 
   // Middleware that allows either Admin session authentication OR Telegram Mini App auth
   const verifySupportChatAuth = async (req: Request, res: Response, next: NextFunction) => {
-    if (req.isAuthenticated()) {
+    if (req.session?.userId) {
       return next();
     }
 
