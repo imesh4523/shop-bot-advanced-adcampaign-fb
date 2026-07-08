@@ -96306,10 +96306,20 @@ async function registerRoutes(httpServer2, app2, io2) {
       const storeNameSetting = await storage.getSetting("STORE_NAME");
       const supportUsernameSetting = await storage.getSetting("SUPPORT_USERNAME");
       const extraInstructionsSetting = await storage.getSetting("EXTRA_INSTRUCTIONS");
+      const lkrRateSetting = await storage.getSetting("CURRENCY_RATE_LKR");
       const storeName = storeNameSetting?.value || "ShopBot";
       const supportUsername = supportUsernameSetting?.value || "@rochana_imesh";
       const faq = faqSetting?.value || "No special instructions. Direct them to support if needed.";
       const extraInstructions = extraInstructionsSetting?.value || "";
+      const lkrRate = parseFloat(lkrRateSetting?.value || "0") || 0;
+      const formatPrice = (priceInCents) => {
+        const usd = (priceInCents / 100).toFixed(2);
+        if (lkrRate > 0) {
+          const lkr = (priceInCents / 100 * lkrRate).toFixed(2);
+          return `$${usd} USD (Rs. ${lkr} LKR)`;
+        }
+        return `$${usd} USD`;
+      };
       const availableProducts = await Promise.all(allProducts.map(async (p) => {
         const stock = await storage.getCredentialsByProduct(p.id);
         const stockCount = stock.filter((s) => s.status === "available").length;
@@ -96327,6 +96337,11 @@ async function registerRoutes(httpServer2, app2, io2) {
       systemPrompt += `Be friendly, helpful, polite, and reply to the user in their language (or default to English). Keep your responses concise and well-structured, suitable for mobile/chat views.
 
 `;
+      if (lkrRate > 0) {
+        systemPrompt += `CURRENCY INFO: Current LKR exchange rate is 1 USD = ${lkrRate} LKR (Sri Lankan Rupees). ALWAYS show prices in BOTH USD ($) AND LKR (Rs.) when answering any price-related question. Example format: "$10.00 USD (Rs. ${(10 * lkrRate).toFixed(2)} LKR)".
+
+`;
+      }
       systemPrompt += `AVAILABLE PRODUCTS / CLOUD ACCOUNTS:
 `;
       if (inStock.length === 0) {
@@ -96334,7 +96349,7 @@ async function registerRoutes(httpServer2, app2, io2) {
 `;
       } else {
         inStock.forEach((p) => {
-          systemPrompt += `- [ID: ${p.id}] ${p.type} | ${p.name}: $${(p.price / 100).toFixed(2)} (In Stock: ${p.stockCount} units)
+          systemPrompt += `- [ID: ${p.id}] ${p.type} | ${p.name}: ${formatPrice(p.price)} (In Stock: ${p.stockCount} units)
 `;
         });
       }
@@ -96348,7 +96363,7 @@ async function registerRoutes(httpServer2, app2, io2) {
       } else {
         activeOffers.forEach((o) => {
           const expiresStr = o.expiresAt ? ` (Expires: ${new Date(o.expiresAt).toLocaleString()})` : "";
-          systemPrompt += `- ${o.name}: Bundle of ${o.bundleQuantity} units of product ID ${o.productId} for $${(o.price / 100).toFixed(2)}${expiresStr}
+          systemPrompt += `- ${o.name}: Bundle of ${o.bundleQuantity} units of product ID ${o.productId} for ${formatPrice(o.price)}${expiresStr}
 `;
         });
       }
@@ -96370,7 +96385,9 @@ ${extraInstructions}
 `;
       systemPrompt += `2. Do not make up product details or prices that are not listed above.
 `;
-      systemPrompt += `3. Maintain developer credit recognition if asked: Developer credits belong to Rochana Imesh.
+      systemPrompt += `3. ALWAYS show prices in both USD ($) and LKR (Rs.) when answering any question about price, cost, or how much something is \u2014 even if the user asks only in one currency.
+`;
+      systemPrompt += `4. Maintain developer credit recognition if asked: Developer credits belong to Rochana Imesh.
 `;
       const callGemini = async (key) => {
         const mapped = incomingMessages.map((msg) => ({

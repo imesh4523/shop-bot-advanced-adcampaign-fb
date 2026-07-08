@@ -1074,11 +1074,23 @@ export async function registerRoutes(
       const storeNameSetting = await storage.getSetting("STORE_NAME");
       const supportUsernameSetting = await storage.getSetting("SUPPORT_USERNAME");
       const extraInstructionsSetting = await storage.getSetting("EXTRA_INSTRUCTIONS");
+      const lkrRateSetting = await storage.getSetting("CURRENCY_RATE_LKR");
 
       const storeName = storeNameSetting?.value || "ShopBot";
       const supportUsername = supportUsernameSetting?.value || "@rochana_imesh";
       const faq = faqSetting?.value || "No special instructions. Direct them to support if needed.";
       const extraInstructions = extraInstructionsSetting?.value || "";
+      const lkrRate = parseFloat(lkrRateSetting?.value || "0") || 0;
+
+      // Helper: format price in both USD and LKR
+      const formatPrice = (priceInCents: number): string => {
+        const usd = (priceInCents / 100).toFixed(2);
+        if (lkrRate > 0) {
+          const lkr = ((priceInCents / 100) * lkrRate).toFixed(2);
+          return `$${usd} USD (Rs. ${lkr} LKR)`;
+        }
+        return `$${usd} USD`;
+      };
 
       const availableProducts = await Promise.all(allProducts.map(async p => {
         const stock = await storage.getCredentialsByProduct(p.id);
@@ -1096,13 +1108,16 @@ export async function registerRoutes(
       let systemPrompt = `You are the AI Support Concierge (live chat support agent) for our Telegram Mini App store, "${storeName}".\n`;
       systemPrompt += `Your primary goal is to help users browse available products, check special bundle offers, read FAQs, and assist them in making purchases.\n`;
       systemPrompt += `Be friendly, helpful, polite, and reply to the user in their language (or default to English). Keep your responses concise and well-structured, suitable for mobile/chat views.\n\n`;
+      if (lkrRate > 0) {
+        systemPrompt += `CURRENCY INFO: Current LKR exchange rate is 1 USD = ${lkrRate} LKR (Sri Lankan Rupees). ALWAYS show prices in BOTH USD ($) AND LKR (Rs.) when answering any price-related question. Example format: "$10.00 USD (Rs. ${(10 * lkrRate).toFixed(2)} LKR)".\n\n`;
+      }
 
       systemPrompt += `AVAILABLE PRODUCTS / CLOUD ACCOUNTS:\n`;
       if (inStock.length === 0) {
         systemPrompt += `- No individual accounts currently in stock.\n`;
       } else {
         inStock.forEach(p => {
-          systemPrompt += `- [ID: ${p.id}] ${p.type} | ${p.name}: $${(p.price / 100).toFixed(2)} (In Stock: ${p.stockCount} units)\n`;
+          systemPrompt += `- [ID: ${p.id}] ${p.type} | ${p.name}: ${formatPrice(p.price)} (In Stock: ${p.stockCount} units)\n`;
         });
       }
       systemPrompt += `\n`;
@@ -1113,7 +1128,7 @@ export async function registerRoutes(
       } else {
         activeOffers.forEach(o => {
           const expiresStr = o.expiresAt ? ` (Expires: ${new Date(o.expiresAt).toLocaleString()})` : "";
-          systemPrompt += `- ${o.name}: Bundle of ${o.bundleQuantity} units of product ID ${o.productId} for $${(o.price / 100).toFixed(2)}${expiresStr}\n`;
+          systemPrompt += `- ${o.name}: Bundle of ${o.bundleQuantity} units of product ID ${o.productId} for ${formatPrice(o.price)}${expiresStr}\n`;
         });
       }
       systemPrompt += `\n`;
@@ -1125,7 +1140,8 @@ export async function registerRoutes(
       systemPrompt += `IMPORTANT RULES:\n`;
       systemPrompt += `1. If a user asks for human assistance or support, tell them to click the support contact button or contact ${supportUsername} on Telegram directly.\n`;
       systemPrompt += `2. Do not make up product details or prices that are not listed above.\n`;
-      systemPrompt += `3. Maintain developer credit recognition if asked: Developer credits belong to Rochana Imesh.\n`;
+      systemPrompt += `3. ALWAYS show prices in both USD ($) and LKR (Rs.) when answering any question about price, cost, or how much something is — even if the user asks only in one currency.\n`;
+      systemPrompt += `4. Maintain developer credit recognition if asked: Developer credits belong to Rochana Imesh.\n`;
 
       // Helper function to call Gemini API
       const callGemini = async (key: string) => {
