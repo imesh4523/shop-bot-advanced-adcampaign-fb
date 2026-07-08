@@ -392,22 +392,16 @@ export default function MiniAppShop() {
     }
   });
 
-  const [displayCurrency, setDisplayCurrency] = useState<"USD" | "LKR" | "INR" | "EUR">((localStorage.getItem("display_currency") as any) || "USD");
+  const [displayCurrency, setDisplayCurrency] = useState<"USD" | "LKR" | "USDT" | "TRX">((localStorage.getItem("display_currency") as any) || "USD");
 
   const { data: rateLkrSetting } = useQuery<{ value: string }>({
     queryKey: ["/api/settings/CURRENCY_RATE_LKR"]
   });
-  const { data: rateInrSetting } = useQuery<{ value: string }>({
-    queryKey: ["/api/settings/CURRENCY_RATE_INR"]
-  });
-  const { data: rateEurSetting } = useQuery<{ value: string }>({
-    queryKey: ["/api/settings/CURRENCY_RATE_EUR"]
-  });
 
   const getRate = (currency: string) => {
     if (currency === 'LKR') return rateLkrSetting?.value ? parseFloat(rateLkrSetting.value) : 300;
-    if (currency === 'INR') return rateInrSetting?.value ? parseFloat(rateInrSetting.value) : 83;
-    if (currency === 'EUR') return rateEurSetting?.value ? parseFloat(rateEurSetting.value) : 0.92;
+    if (currency === 'USDT') return 1.0;
+    if (currency === 'TRX') return 8.0; // Default TRX rate
     return 1.0;
   };
 
@@ -417,10 +411,18 @@ export default function MiniAppShop() {
     const toRate = getRate(toCurrency);
     const convertedAmount = (amountInUsdCents / 100) * toRate;
     
-    if (toCurrency === 'LKR') return `${convertedAmount.toFixed(0)} LKR`;
-    if (toCurrency === 'INR') return `₹${convertedAmount.toFixed(2)}`;
-    if (toCurrency === 'EUR') return `€${convertedAmount.toFixed(2)}`;
-    return `$${(amountInUsdCents / 100).toFixed(2)}`;
+    if (toCurrency === 'LKR') return `Rs. ${convertedAmount.toFixed(2)}`;
+    if (toCurrency === 'USDT') return `₮ ${convertedAmount.toFixed(2)}`;
+    if (toCurrency === 'TRX') return `${convertedAmount.toFixed(2)} TRX`;
+    return `$${convertedAmount.toFixed(2)}`;
+  };
+
+  const getUserBalanceString = () => {
+    if (!user) return "$0.00";
+    if (displayCurrency === 'LKR') return `Rs. ${(((user as any).balanceLkr || 0) / 100).toFixed(2)}`;
+    if (displayCurrency === 'USDT') return `₮ ${(((user as any).balanceUsdt || 0) / 100).toFixed(2)}`;
+    if (displayCurrency === 'TRX') return `${(((user as any).balanceTrx || 0) / 100).toFixed(2)} TRX`;
+    return `$${((user.balance || 0) / 100).toFixed(2)}`;
   };
 
   // Immediately set body background on first render (before useEffect) to avoid flash
@@ -446,7 +448,8 @@ export default function MiniAppShop() {
   // Deposit States
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
   const [depositAmount, setDepositAmount] = useState("10.00");
-  const [depositMethod, setDepositMethod] = useState<"stripe" | "trc20" | "aptos" | "binance">("stripe");
+  const [depositMethod, setDepositMethod] = useState<"stripe" | "trc20" | "aptos" | "binance">("binance");
+  const [selectedDepositCurrency, setSelectedDepositCurrency] = useState<"USD" | "LKR" | "USDT" | "TRX">("USD");
   const [activeDeposit, setActiveDeposit] = useState<{ paymentId: number; walletAddress: string; amount: number; method: string; remark?: string } | null>(null);
   const [txidInput, setTxidInput] = useState("");
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
@@ -540,14 +543,22 @@ export default function MiniAppShop() {
       }
 
       const minDepositLimit = minDepositSetting?.value ? parseFloat(minDepositSetting.value) : 1.0;
-      if (amt < minDepositLimit) {
-        toast({ title: "Minimum Deposit Required", description: `Minimum deposit amount is $${minDepositLimit.toFixed(2)}.`, variant: "destructive" });
+      const rateLkr = rateLkrSetting?.value ? parseFloat(rateLkrSetting.value) : 300;
+      const actualMinDeposit = selectedDepositCurrency === 'LKR' ? minDepositLimit * rateLkr : minDepositLimit;
+
+      if (amt < actualMinDeposit) {
+        toast({
+          title: "Minimum Deposit Required",
+          description: `Minimum deposit amount is ${selectedDepositCurrency === 'LKR' ? 'Rs. ' : (selectedDepositCurrency === 'USDT' ? '₮ ' : (selectedDepositCurrency === 'TRX' ? 'TRX ' : '$'))}${actualMinDeposit.toFixed(2)}.`,
+          variant: "destructive"
+        });
         return;
       }
       
       const res = await miniApiRequest("POST", "/api/mini/deposit", {
         amount: amt,
-        method: depositMethod
+        method: depositMethod,
+        currency: selectedDepositCurrency
       });
       const data = await res.json();
 
@@ -1738,7 +1749,7 @@ export default function MiniAppShop() {
                 </div>
                 <div className="text-center space-y-0.5">
                   <div className="text-[10px] font-black text-neutral-400 dark:text-neutral-500 uppercase tracking-widest">Balance</div>
-                  <div className="text-xl font-black text-neutral-900 dark:text-white tracking-tighter">{formatPrice(user?.balance || 0, 'USD', displayCurrency)}</div>
+                  <div className="text-xl font-black text-neutral-900 dark:text-white tracking-tighter">{getUserBalanceString()}</div>
                 </div>
               </div>
 
@@ -1957,7 +1968,7 @@ export default function MiniAppShop() {
             >
               <Wallet className="w-4 h-4 text-purple-600" />
               <span className="text-lg font-black tracking-tighter text-neutral-900 dark:text-white leading-none italic">
-                {formatPrice(user?.balance || 0, 'USD', displayCurrency)}
+                {getUserBalanceString()}
               </span>
             </motion.div>
             <ThemeToggle className="bg-neutral-50 dark:bg-neutral-900 border-neutral-100 dark:border-neutral-800 text-neutral-900 dark:text-white hover:bg-neutral-200 dark:hover:bg-neutral-800 shadow-inner" />
@@ -2501,21 +2512,32 @@ export default function MiniAppShop() {
                   {activeDeposit ? "Submit transaction details" : "Select amount and method"}
                 </DialogDescription>
                 {!activeDeposit && (
-                  <div className="flex justify-center gap-2 mt-4">
-                    {(['USD', 'LKR', 'INR', 'EUR'] as const).map((curr) => (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+                    {[
+                      { id: 'USD', name: 'USD', symbol: '$', balance: (user?.balance || 0) / 100, defaultMethod: 'binance' },
+                      { id: 'LKR', name: 'LKR', symbol: 'Rs.', balance: ((user as any)?.balanceLkr || 0) / 100, defaultMethod: 'binance' },
+                      { id: 'USDT', name: 'USDT', symbol: '₮', balance: ((user as any)?.balanceUsdt || 0) / 100, defaultMethod: 'trc20' },
+                      { id: 'TRX', name: 'TRX', symbol: 'TRX', balance: ((user as any)?.balanceTrx || 0) / 100, defaultMethod: 'trc20' }
+                    ].map((curr) => (
                       <button
-                        key={curr}
+                        key={curr.id}
+                        type="button"
                         onClick={() => {
-                          setDisplayCurrency(curr);
-                          localStorage.setItem("display_currency", curr);
+                          setSelectedDepositCurrency(curr.id as any);
+                          setDepositMethod(curr.defaultMethod as any);
                         }}
-                        className={`text-[9px] font-black px-3.5 py-1.5 rounded-full transition-all duration-300 ${
-                          displayCurrency === curr
-                            ? 'bg-purple-600 text-white shadow-md shadow-purple-900/30 scale-105'
-                            : 'bg-neutral-100 dark:bg-white/5 text-neutral-400 hover:text-neutral-900 dark:hover:text-white border border-neutral-200 dark:border-white/5'
+                        className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all duration-300 text-center relative overflow-hidden ${
+                          selectedDepositCurrency === curr.id
+                            ? 'bg-purple-600/10 border-purple-500 text-neutral-900 dark:text-white shadow-lg ring-1 ring-purple-500'
+                            : 'bg-neutral-50 dark:bg-white/5 border-purple-50/50 dark:border-white/5 text-neutral-500 hover:border-purple-200 dark:hover:border-purple-500/50'
                         }`}
                       >
-                        {curr}
+                        <span className="text-[10px] font-black text-neutral-400 dark:text-neutral-500 uppercase tracking-widest leading-none mb-1">
+                          {curr.name}
+                        </span>
+                        <span className="text-sm font-black tracking-tight whitespace-nowrap">
+                          {curr.symbol} {curr.balance.toFixed(2)}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -2527,8 +2549,11 @@ export default function MiniAppShop() {
               <div className="py-4 space-y-6">
                 <div className="flex flex-col gap-2">
                   <label className="text-[10px] font-black text-neutral-400 dark:text-neutral-500 uppercase tracking-widest flex justify-between">
-                    <span>Amount ($ USD)</span>
-                    <span className="text-purple-500 font-bold lowercase tracking-normal">Min: ${minDepositLimit.toFixed(2)}</span>
+                    <span>Amount ({selectedDepositCurrency})</span>
+                    <span className="text-purple-500 font-bold lowercase tracking-normal">
+                      Min: {selectedDepositCurrency === 'LKR' ? 'Rs. ' : (selectedDepositCurrency === 'USDT' ? '₮ ' : (selectedDepositCurrency === 'TRX' ? 'TRX ' : '$'))}
+                      {selectedDepositCurrency === 'LKR' ? (minDepositLimit * 300).toFixed(2) : minDepositLimit.toFixed(2)} {selectedDepositCurrency}
+                    </span>
                   </label>
                   <input 
                     type="text" 
@@ -2543,49 +2568,74 @@ export default function MiniAppShop() {
                   <label className="text-[10px] font-black text-neutral-400 dark:text-neutral-500 uppercase tracking-widest block">Payment Method</label>
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      { 
-                        id: 'stripe', 
-                        name: 'Stripe / Card', 
-                        icon: (
-                          <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current text-[#635BFF]" xmlns="http://www.w3.org/2000/svg">
-                            <title>Stripe</title>
-                            <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.594-7.305h.003z"/>
-                          </svg>
-                        )
-                      },
-                      { 
-                        id: 'trc20', 
-                        name: 'USDT (TRC20)', 
-                        icon: (
-                          <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current text-[#26A17B]" xmlns="http://www.w3.org/2000/svg">
-                            <title>Tether</title>
-                            <path d="M18.7538 10.5176c0 .6251-2.2379 1.1483-5.2381 1.2812l.0028.0007c-.0848.0064-.5233.0325-1.5012.0325-.7778 0-1.33-.0233-1.5237-.0325-3.0059-.1322-5.2495-.6555-5.2495-1.2819s2.2436-1.149 5.2495-1.2834v2.0442c.1965.0142.7594.0474 1.5372.0474.9334 0 1.4008-.0389 1.4849-.0466V9.2356c2.9994.1337 5.2381.657 5.2381 1.282zm5.19.5466L12.1248 22.389a.1803.1803 0 0 1-.2496 0L.0562 11.0635a.1781.1781 0 0 1-.0382-.2079l4.3762-9.1921a.1767.1767 0 0 1 .1626-.1026h14.8878a.1768.1768 0 0 1 .1612.1032l4.3762 9.1922a.1782.1782 0 0 1-.0382.2079zm-4.478-.4038c0-.8068-2.5515-1.4799-5.9473-1.6369V7.195h4.186V4.4055H6.3076V7.195h4.1852v1.8286c-3.4018.1562-5.9601.83-5.9601 1.6376 0 .8075 2.5583 1.4806 5.9601 1.6376v5.8618h3.025v-5.8639c3.394-.1563 5.948-.8295 5.948-1.6363z"/>
-                          </svg>
-                        )
-                      },
-                      { 
-                        id: 'aptos', 
-                        name: 'USDT (Aptos)', 
-                        icon: (
-                          <svg viewBox="0 0 74.67 74.96" className="w-4 h-4 fill-current text-[#1ea7d6]" xmlns="http://www.w3.org/2000/svg">
-                            <title>Aptos</title>
-                            <path d="M57.84,25.08H51.23a2.67,2.67,0,0,1-2-.91l-2.68-3a2.12,2.12,0,0,0-3.15,0l-2.3,2.6a4,4,0,0,1-3,1.34H2a37.24,37.24,0,0,0-2,9.25H34.13a2.21,2.21,0,0,0,1.59-.68l3.18-3.32a2.13,2.13,0,0,1,1.52-.64h.13a2.05,2.05,0,0,1,1.57.71l2.68,3a2.69,2.69,0,0,0,2,.91H74.67a36.79,36.79,0,0,0-2-9.25H57.84Z"/>
-                            <path d="M20.65,53.78a2.17,2.17,0,0,0,1.59-.68l3.18-3.31a2.1,2.1,0,0,1,1.52-.65h.13a2.12,2.12,0,0,1,1.58.71l2.68,3a2.7,2.7,0,0,0,2,.9H71.09a37.09,37.09,0,0,0,3.07-9.34H37.92a2.67,2.67,0,0,1-2-.91l-2.68-3a2.1,2.1,0,0,0-3.15,0l-2.3,2.59a4,4,0,0,1-3,1.34H.51a37.5,37.5,0,0,0,3.07,9.34Z"/>
-                            <path d="M47.44,15A2.23,2.23,0,0,0,49,14.29L52.21,11a2.09,2.09,0,0,1,1.52-.64h.13a2.09,2.09,0,0,1,1.57.7l2.68,3a2.67,2.67,0,0,0,2,.91H67.3A37.48,37.48,0,0,0,7.37,15Z"/>
-                            <path d="M33,63H23.2a2.7,2.7,0,0,1-2-.9l-2.68-3a2.1,2.1,0,0,0-3.15,0l-2.3,2.6a4,4,0,0,1-3,1.33H9.94a37.44,37.44,0,0,0,54.79,0Z"/>
-                          </svg>
-                        )
-                      },
-                      { 
-                        id: 'binance', 
-                        name: 'Binance Pay', 
-                        icon: (
-                          <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current text-[#F0B90B]" xmlns="http://www.w3.org/2000/svg">
-                            <title>Binance</title>
-                            <path d="M16.624 13.9202l2.7175 2.7154-7.353 7.353-7.353-7.352 2.7175-2.7164 4.6355 4.6595 4.6356-4.6595zm4.6366-4.6366L24 12l-2.7154 2.7164L18.5682 12l2.6924-2.7164zm-9.272.001l2.7163 2.6914-2.7164 2.7174v-.001L9.2721 12l2.7164-2.7154zm-9.2722-.001L5.4088 12l-2.6914 2.6924L0 12l2.7164-2.7164zM11.9885.0115l7.353 7.329-2.7174 2.7154-4.6356-4.6356-4.6355 4.6595-2.7174-2.7154 7.353-7.353z"/>
-                          </svg>
-                        )
-                      }
+                      ...(selectedDepositCurrency === 'USD' ? [
+                        { 
+                          id: 'binance', 
+                          name: 'Binance Pay', 
+                          icon: (
+                            <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current text-[#F0B90B]" xmlns="http://www.w3.org/2000/svg">
+                              <title>Binance</title>
+                              <path d="M16.624 13.9202l2.7175 2.7154-7.353 7.353-7.353-7.352 2.7175-2.7164 4.6355 4.6595 4.6356-4.6595zm4.6366-4.6366L24 12l-2.7154 2.7164L18.5682 12l2.6924-2.7164zm-9.272.001l2.7163 2.6914-2.7164 2.7174v-.001L9.2721 12l2.7164-2.7154zm-9.2722-.001L5.4088 12l-2.6914 2.6924L0 12l2.7164-2.7164zM11.9885.0115l7.353 7.329-2.7174 2.7154-4.6356-4.6356-4.6355 4.6595-2.7174-2.7154 7.353-7.353z"/>
+                            </svg>
+                          )
+                        },
+                        { 
+                          id: 'stripe', 
+                          name: 'Stripe / Card', 
+                          icon: (
+                            <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current text-[#635BFF]" xmlns="http://www.w3.org/2000/svg">
+                              <title>Stripe</title>
+                              <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.594-7.305h.003z"/>
+                            </svg>
+                          )
+                        }
+                      ] : []),
+                      ...(selectedDepositCurrency === 'LKR' ? [
+                        { 
+                          id: 'binance', 
+                          name: 'Binance Pay', 
+                          icon: (
+                            <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current text-[#F0B90B]" xmlns="http://www.w3.org/2000/svg">
+                              <title>Binance</title>
+                              <path d="M16.624 13.9202l2.7175 2.7154-7.353 7.353-7.353-7.352 2.7175-2.7164 4.6355 4.6595 4.6356-4.6595zm4.6366-4.6366L24 12l-2.7154 2.7164L18.5682 12l2.6924-2.7164zm-9.272.001l2.7163 2.6914-2.7164 2.7174v-.001L9.2721 12l2.7164-2.7154zm-9.2722-.001L5.4088 12l-2.6914 2.6924L0 12l2.7164-2.7164zM11.9885.0115l7.353 7.329-2.7174 2.7154-4.6356-4.6356-4.6355 4.6595-2.7174-2.7154 7.353-7.353z"/>
+                            </svg>
+                          )
+                        }
+                      ] : []),
+                      ...(selectedDepositCurrency === 'USDT' ? [
+                        { 
+                          id: 'trc20', 
+                          name: 'USDT (TRC20)', 
+                          icon: (
+                            <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current text-[#26A17B]" xmlns="http://www.w3.org/2000/svg">
+                              <title>Tether</title>
+                              <path d="M18.7538 10.5176c0 .6251-2.2379 1.1483-5.2381 1.2812l.0028.0007c-.0848.0064-.5233.0325-1.5012.0325-.7778 0-1.33-.0233-1.5237-.0325-3.0059-.1322-5.2495-.6555-5.2495-1.2819s2.2436-1.149 5.2495-1.2834v2.0442c.1965.0142.7594.0474 1.5372.0474.9334 0 1.4008-.0389 1.4849-.0466V9.2356c2.9994.1337 5.2381.657 5.2381 1.282zm5.19.5466L12.1248 22.389a.1803.1803 0 0 1-.2496 0L.0562 11.0635a.1781.1781 0 0 1-.0382-.2079l4.3762-9.1921a.1767.1767 0 0 1 .1626-.1026h14.8878a.1768.1768 0 0 1 .1612.1032l4.3762 9.1922a.1782.1782 0 0 1-.0382.2079zm-4.478-.4038c0-.8068-2.5515-1.4799-5.9473-1.6369V7.195h4.186V4.4055H6.3076V7.195h4.1852v1.8286c-3.4018.1562-5.9601.83-5.9601 1.6376 0 .8075 2.5583 1.4806 5.9601 1.6376v5.8618h3.025v-5.8639c3.394-.1563 5.948-.8295 5.948-1.6363z"/>
+                            </svg>
+                          )
+                        },
+                        { 
+                          id: 'aptos', 
+                          name: 'USDT (Aptos)', 
+                          icon: (
+                            <svg viewBox="0 0 74.67 74.96" className="w-4 h-4 fill-current text-[#1ea7d6]" xmlns="http://www.w3.org/2000/svg">
+                              <title>Aptos</title>
+                              <path d="M57.84,25.08H51.23a2.67,2.67,0,0,1-2-.91l-2.68-3a2.12,2.12,0,0,0-3.15,0l-2.3,2.6a4,4,0,0,1-3,1.34H2a37.24,37.24,0,0,0-2,9.25H34.13a2.21,2.21,0,0,0,1.59-.68l3.18-3.32a2.13,2.13,0,0,1,1.52-.64h.13a2.05,2.05,0,0,1,1.57.71l2.68,3a2.69,2.69,0,0,0,2,.91H74.67a36.79,36.79,0,0,0-2-9.25H57.84Z"/>
+                              <path d="M20.65,53.78a2.17,2.17,0,0,0,1.59-.68l3.18-3.31a2.1,2.1,0,0,1,1.52-.65h.13a2.12,2.12,0,0,1,1.58.71l2.68,3a2.7,2.7,0,0,0,2,.9H71.09a37.09,37.09,0,0,0,3.07-9.34H37.92a2.67,2.67,0,0,1-2-.91l-2.68-3a2.1,2.1,0,0,0-3.15,0l-2.3,2.59a4,4,0,0,1-3,1.34H.51a37.5,37.5,0,0,0,3.07,9.34Z"/>
+                              <path d="M47.44,15A2.23,2.23,0,0,0,49,14.29L52.21,11a2.09,2.09,0,0,1,1.52-.64h.13a2.09,2.09,0,0,1,1.57.7l2.68,3a2.67,2.67,0,0,0,2,.91H67.3A37.48,37.48,0,0,0,7.37,15Z"/>
+                              <path d="M33,63H23.2a2.7,2.7,0,0,1-2-.9l-2.68-3a2.1,2.1,0,0,0-3.15,0l-2.3,2.6a4,4,0,0,1-3,1.33H9.94a37.44,37.44,0,0,0,54.79,0Z"/>
+                            </svg>
+                          )
+                        }
+                      ] : []),
+                      ...(selectedDepositCurrency === 'TRX' ? [
+                        { 
+                          id: 'trc20', 
+                          name: 'TRX Direct Transfer', 
+                          icon: (
+                            <span className="text-red-500 font-bold text-[10px]">TRX</span>
+                          )
+                        }
+                      ] : [])
                     ].map((m) => (
                       <button
                         key={m.id}

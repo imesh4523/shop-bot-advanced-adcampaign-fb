@@ -100,7 +100,7 @@ export default function Dashboard() {
         />
         <StatsCard
           title="Total Sales"
-          value={stats?.totalSales.toString() || "0"}
+          value={stats?.totalSales?.toString() || "0"}
           icon={Package}
           description="Total successful orders"
           loading={statsLoading}

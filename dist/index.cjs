@@ -46417,6 +46417,9 @@ var init_schema2 = __esm({
       firstName: text("first_name"),
       lastName: text("last_name"),
       balance: integer("balance").notNull().default(0),
+      balanceLkr: integer("balance_lkr").notNull().default(0),
+      balanceUsdt: integer("balance_usdt").notNull().default(0),
+      balanceTrx: integer("balance_trx").notNull().default(0),
       lastAction: text("last_action"),
       lastMessageId: integer("last_message_id"),
       lastErrorMessageId: integer("last_error_message_id"),
@@ -96662,15 +96665,18 @@ ${extraInstructions}
   });
   app2.post("/api/mini/deposit", verifyMiniAppAuth, async (req, res) => {
     const tgUser = req.tgUser;
-    const { amount, method } = req.body;
+    const { amount, method, currency } = req.body;
     if (!amount || isNaN(amount) || amount <= 0) {
       return res.status(400).json({ message: "Invalid amount" });
     }
     try {
       const minDepositSetting = await storage.getSetting("MIN_DEPOSIT_LIMIT");
       const minDeposit = minDepositSetting ? parseFloat(minDepositSetting.value) : 1;
-      if (amount < minDeposit) {
-        return res.status(400).json({ message: `Minimum deposit amount is $${minDeposit.toFixed(2)}` });
+      const rateLkrSetting = await storage.getSetting("CURRENCY_RATE_LKR");
+      const rateLkr = rateLkrSetting?.value ? parseFloat(rateLkrSetting.value) : 300;
+      const actualMinDeposit = currency === "LKR" ? minDeposit * rateLkr : minDeposit;
+      if (amount < actualMinDeposit) {
+        return res.status(400).json({ message: `Minimum deposit amount is ${currency === "LKR" ? "Rs. " : "$"}${actualMinDeposit.toFixed(2)}` });
       }
       const dbUser = await storage.getTelegramUser(tgUser.id.toString());
       if (!dbUser) {
@@ -96690,6 +96696,7 @@ ${extraInstructions}
           telegramUserId: dbUser.id,
           amount: amountCents,
           paymentMethod: "stripe",
+          currency: "USD",
           status: "pending",
           cryptomusUuid: session2.id
         });
@@ -96704,6 +96711,7 @@ ${extraInstructions}
           telegramUserId: dbUser.id,
           amount: amountCents,
           paymentMethod: payMethod,
+          currency: currency || "USD",
           status: "pending",
           cryptomusUuid: binanceRemark
         });
@@ -96833,9 +96841,17 @@ ${extraInstructions}
             await tx.insert(settings).values({ key: "USED_TXIDS_JSON", value: JSON.stringify(currentUsed) });
           }
           const creditAmountCents = Math.round(actualAmount * 100);
-          await tx.update(telegramUsers).set({
-            balance: u.balance + creditAmountCents
-          }).where(eq(telegramUsers.id, u.id));
+          const updateObj = {};
+          if (p.currency === "LKR") {
+            updateObj.balanceLkr = u.balanceLkr + creditAmountCents;
+          } else if (p.currency === "USDT") {
+            updateObj.balanceUsdt = u.balanceUsdt + creditAmountCents;
+          } else if (p.currency === "TRX") {
+            updateObj.balanceTrx = u.balanceTrx + creditAmountCents;
+          } else {
+            updateObj.balance = u.balance + creditAmountCents;
+          }
+          await tx.update(telegramUsers).set(updateObj).where(eq(telegramUsers.id, u.id));
           await tx.update(payments).set({
             status: "completed",
             externalId: finalTxId,
