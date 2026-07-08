@@ -298,7 +298,7 @@ export default function SupportChatPage() {
       const data = await res.json();
       setUploadedAttachment({
         url: data.fileUrl,
-        type: file.type.startsWith("image/") ? "image" : "pdf",
+        type: file.type.startsWith("image/") ? "image" : (file.type === "application/pdf" ? "pdf" : "document"),
         name: file.name
       });
       toast({
@@ -631,20 +631,22 @@ export default function SupportChatPage() {
                                     />
                                   </div>
                                 )}
-                                {msg.attachmentUrl && msg.attachmentType === "pdf" && (
-                                  <a 
-                                    href={msg.attachmentUrl} 
-                                    target="_blank" 
-                                    rel="noreferrer" 
-                                    className="flex items-center gap-2 p-2.5 bg-black/20 rounded-xl mb-2 hover:bg-black/35 transition-all text-purple-300 font-bold border border-white/5"
-                                  >
-                                    <FileText className="w-4 h-4 text-purple-400 shrink-0" />
-                                    <span className="truncate text-xs hover:underline">View PDF Document</span>
-                                  </a>
-                                )}
-                                {(!msg.attachmentUrl || (msg.message !== "📷 Photo Attachment" && msg.message !== "📄 PDF Attachment")) && (
-                                  <div>{msg.message}</div>
-                                )}
+                                {msg.attachmentUrl && (msg.attachmentType === "pdf" || msg.attachmentType === "document") && (
+                                   <a 
+                                     href={msg.attachmentUrl} 
+                                     target="_blank" 
+                                     rel="noreferrer" 
+                                     className="flex items-center gap-2 p-2.5 bg-black/20 rounded-xl mb-2 hover:bg-black/35 transition-all text-purple-300 font-bold border border-white/5"
+                                   >
+                                     <FileText className="w-4 h-4 text-purple-400 shrink-0" />
+                                     <span className="truncate text-xs hover:underline">
+                                       {msg.attachmentType === "pdf" ? "View PDF Document" : "View Document File"}
+                                     </span>
+                                   </a>
+                                 )}
+                                 {(!msg.attachmentUrl || (msg.message !== "📷 Photo Attachment" && msg.message !== "📄 PDF Attachment" && msg.message !== "📄 Attachment")) && (
+                                   <div>{msg.message}</div>
+                                 )}
                               </div>
                               <span className={`text-[9px] text-white/30 font-semibold uppercase ${isAdmin ? 'text-right' : 'text-left'}`}>
                                 {format(new Date(msg.createdAt), "hh:mm a")}

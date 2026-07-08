@@ -1359,10 +1359,11 @@ export async function registerRoutes(
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
-    // Only allow images and PDFs
-    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'application/pdf'];
-    if (!allowedMimeTypes.some(m => req.file.mimetype.startsWith('image/') || req.file.mimetype === 'application/pdf')) {
-      return res.status(400).json({ message: "Only images and PDF files are allowed." });
+    // Block dangerous executable extensions for security
+    const blockedExtensions = ['.exe', '.bat', '.cmd', '.sh', '.js', '.vbs', '.scr', '.msi', '.com', '.lnk', '.jar'];
+    const fileExt = path.extname(req.file.originalname).toLowerCase();
+    if (blockedExtensions.includes(fileExt) || req.file.mimetype.includes("executable")) {
+      return res.status(400).json({ message: "This file type is not allowed for security reasons." });
     }
     try {
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
@@ -4305,26 +4306,32 @@ app.post("/api/support/reply", isAuth, async (req, res) => {
       return res.status(400).json({ message: "telegramId and message or attachment are required" });
     }
 
-    const finalMessage = message ? message.trim() : (attachmentType === 'image' ? '📷 Photo Attachment' : '📄 PDF Attachment');
+    const finalMessage = message ? message.trim() : (attachmentType === 'image' ? '📷 Photo Attachment' : '📄 Attachment');
 
     // Send message to user via Telegram if it's a real Telegram user
     if (!telegramId.startsWith("web_")) {
       if (!supportBot) {
-        return res.status(400).json({ message: "Support bot is not running. Please make sure the support bot token is configured in Settings." });
-      }
-      if (attachmentUrl) {
-        // Resolve absolute url for Telegram bot if it is a relative upload
-        const absoluteUrl = attachmentUrl.startsWith("http") 
-          ? attachmentUrl 
-          : `${req.protocol}://${req.get('host')}${attachmentUrl}`;
-
-        if (attachmentType === "image") {
-          await supportBot.sendPhoto(telegramId, absoluteUrl, { caption: message || "" });
-        } else {
-          await supportBot.sendDocument(telegramId, absoluteUrl, { caption: message || "" });
-        }
+        console.warn(`Support bot is not running/configured. Reply to ${telegramId} will only be delivered via web socket.`);
       } else {
-        await supportBot.sendMessage(telegramId, finalMessage);
+        try {
+          if (attachmentUrl) {
+            // Resolve absolute url for Telegram bot if it is a relative upload
+            const absoluteUrl = attachmentUrl.startsWith("http") 
+              ? attachmentUrl 
+              : `${req.protocol}://${req.get('host')}${attachmentUrl}`;
+
+            if (attachmentType === "image") {
+              await supportBot.sendPhoto(telegramId, absoluteUrl, { caption: message || "" });
+            } else {
+              await supportBot.sendDocument(telegramId, absoluteUrl, { caption: message || "" });
+            }
+          } else {
+            await supportBot.sendMessage(telegramId, finalMessage);
+          }
+        } catch (botErr) {
+          console.error("Failed to forward support reply to Telegram Bot:", botErr);
+          // Do not block - let the local mini-app web chat receive it
+        }
       }
     }
 

@@ -768,7 +768,7 @@ export default function MiniAppShop() {
       const data = await res.json();
       setUploadedAttachment({
         url: data.fileUrl,
-        type: file.type.startsWith("image/") ? "image" : "pdf",
+        type: file.type.startsWith("image/") ? "image" : (file.type === "application/pdf" ? "pdf" : "document"),
         name: file.name
       });
       toast({
@@ -2535,7 +2535,7 @@ export default function MiniAppShop() {
                                   />
                                 </div>
                               )}
-                              {msg.attachmentUrl && msg.attachmentType === "pdf" && (
+                              {msg.attachmentUrl && (msg.attachmentType === "pdf" || msg.attachmentType === "document") && (
                                 <a 
                                   href={msg.attachmentUrl} 
                                   target="_blank" 
@@ -2543,10 +2543,12 @@ export default function MiniAppShop() {
                                   className="flex items-center gap-2 p-2.5 bg-black/25 rounded-xl mb-2 hover:bg-black/35 transition-all text-purple-300 font-bold border border-white/5"
                                 >
                                   <FileText className="w-4 h-4 text-purple-400 shrink-0" />
-                                  <span className="truncate text-[9px] hover:underline">View PDF Document</span>
+                                  <span className="truncate text-[9px] hover:underline">
+                                    {msg.attachmentType === "pdf" ? "View PDF Document" : "View Document File"}
+                                  </span>
                                 </a>
                               )}
-                              {(!msg.attachmentUrl || (displayMessage !== "📷 Photo Attachment" && displayMessage !== "📄 PDF Attachment")) && (
+                              {(!msg.attachmentUrl || (displayMessage !== "📷 Photo Attachment" && displayMessage !== "📄 PDF Attachment" && displayMessage !== "📄 Attachment")) && (
                                 <div className="space-y-1 break-all whitespace-pre-wrap">
                                   {displayMessage}
                                 </div>
