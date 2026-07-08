@@ -17,7 +17,6 @@ import {
   Store as StoreIcon,
   CheckCircle2,
   Clock,
-  ShieldCheck,
   Zap,
   ExternalLink,
   ChevronDown,
@@ -2044,16 +2043,6 @@ export default function MiniAppShop() {
             )}
           </div>
         )}
-
-        <div className="bg-amber-50 p-6 rounded-[2rem] border border-amber-100/50 flex items-start gap-4">
-          <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center text-amber-500 shrink-0 shadow-sm">
-            <ShieldCheck className="w-5 h-5" />
-          </div>
-          <div className="space-y-1">
-            <h5 className="text-sm font-black text-amber-900 tracking-tight uppercase">Support Security</h5>
-            <p className="text-[11px] font-bold text-amber-700/70 leading-relaxed uppercase">Your credentials are encrypted end-to-end. Contact {supportUsername} for bulk inquiries.</p>
-          </div>
-        </div>
       </div>
     );
   };
