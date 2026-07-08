@@ -97548,6 +97548,78 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
     req.session.userId = user.id;
     res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName });
   });
+  app2.get("/api/auth/google/callback", async (req, res) => {
+    const { code, state } = req.query;
+    if (!code) {
+      return res.status(400).send("Authorization code is required");
+    }
+    try {
+      const googleClientIdSetting = await storage.getSetting("GOOGLE_CLIENT_ID");
+      const googleClientSecretSetting = await storage.getSetting("GOOGLE_CLIENT_SECRET");
+      if (!googleClientIdSetting?.value || !googleClientSecretSetting?.value) {
+        return res.status(500).send("Google OAuth settings are not fully configured.");
+      }
+      const clientId = googleClientIdSetting.value.trim();
+      const clientSecret = googleClientSecretSetting.value.trim();
+      const protocol = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
+      const host = req.headers.host || "localhost:5000";
+      const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
+      const tokenResponse = await axios_default.post("https://oauth2.googleapis.com/token", {
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code"
+      });
+      const { id_token } = tokenResponse.data;
+      if (!id_token) {
+        return res.status(400).send("Failed to retrieve ID token from Google.");
+      }
+      const tokenInfoResponse = await axios_default.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${id_token}`);
+      const tokenInfo = tokenInfoResponse.data;
+      if (!tokenInfo || tokenInfo.error_description) {
+        return res.status(400).send(tokenInfo.error_description || "Invalid Google ID token");
+      }
+      if (tokenInfo.aud !== clientId) {
+        return res.status(400).send("Audience mismatch.");
+      }
+      if (!tokenInfo.email_verified || tokenInfo.email_verified === "false" || tokenInfo.email_verified === false) {
+        return res.status(400).send("Google email is not verified.");
+      }
+      const email = tokenInfo.email;
+      const cleanEmail = email.toLowerCase().trim();
+      if (state === "admin") {
+        const user = await storage.getUserByEmail(cleanEmail);
+        if (!user) {
+          return res.status(401).send("Access denied. Admin account not found with this email.");
+        }
+        req.session.userId = user.id;
+        return res.redirect("/main-admin");
+      } else {
+        const telegramId = `email:${cleanEmail}`;
+        let user = await storage.getTelegramUser(telegramId);
+        if (!user) {
+          const name = tokenInfo.given_name || cleanEmail.split("@")[0];
+          const displayName = name.charAt(0).toUpperCase() + name.slice(1);
+          user = await storage.createTelegramUser({
+            telegramId,
+            username: cleanEmail.split("@")[0],
+            firstName: displayName,
+            lastName: tokenInfo.family_name || "Client",
+            balance: 0,
+            lastAction: null
+          });
+          console.log(`[Google Customer Auth Callback] Created new user profile for ${cleanEmail}`);
+        } else {
+          console.log(`[Google Customer Auth Callback] Logged in existing user ${cleanEmail}.`);
+        }
+        return res.redirect(`/?web_user_id=${encodeURIComponent(telegramId)}`);
+      }
+    } catch (err) {
+      console.error("Google OAuth Callback Error:", err.response?.data || err.message);
+      res.status(500).send("Google authentication callback failed: " + (err.message || "Unknown error"));
+    }
+  });
   app2.post("/api/auth/google", loginLimiter, async (req, res) => {
     const { credential } = req.body;
     if (!credential) {
