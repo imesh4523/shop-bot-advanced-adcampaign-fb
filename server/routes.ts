@@ -1380,8 +1380,10 @@ export async function registerRoutes(
       const filename = uniqueSuffix + path.extname(req.file.originalname);
       const base64Data = req.file.buffer.toString('base64');
       await storage.saveUploadedFile(filename, req.file.mimetype, base64Data);
-      
-      const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${filename}`;
+
+      // Use x-forwarded-proto for correct https on Render/DO reverse proxy
+      const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol;
+      const fileUrl = `${proto}://${req.get('host')}/uploads/${filename}`;
       res.json({
         fileUrl,
         filename: req.file.originalname,

@@ -772,17 +772,23 @@ export default function MiniAppShop() {
         safeLocalStorage.setItem("web_user_id", webUserId);
       }
 
-      const res = await fetch("/api/support/upload", {
-        method: "POST",
-        headers: {
-          'x-telegram-init-data': initData,
-          'x-web-user-id': webUserId
-        },
-        body: formData
-      });
+      let res: Response;
+      try {
+        res = await fetch("/api/support/upload", {
+          method: "POST",
+          headers: {
+            'x-telegram-init-data': initData || "",
+            'x-web-user-id': webUserId
+          },
+          body: formData
+        });
+      } catch (netErr: any) {
+        // Network-level failure (CORS, offline, etc.)
+        throw new Error("Network error: " + (netErr.message || "Cannot connect to server"));
+      }
 
       if (!res.ok) {
-        let errMsg = "Upload failed";
+        let errMsg = `Upload failed (${res.status})`;
         try {
           const errData = await res.json();
           errMsg = errData.message || errMsg;
@@ -791,19 +797,27 @@ export default function MiniAppShop() {
       }
 
       const data = await res.json();
+
+      // Normalize http → https (fixes mixed-content block in Telegram WebView)
+      let fileUrl: string = data.fileUrl || "";
+      if (fileUrl.startsWith("http://")) {
+        fileUrl = fileUrl.replace("http://", "https://");
+      }
+
       setUploadedAttachment({
-        url: data.fileUrl,
+        url: fileUrl,
         type: file.type.startsWith("image/") ? "image" : (file.type === "application/pdf" ? "pdf" : "document"),
         name: file.name
       });
       toast({
-        title: "File Uploaded",
+        title: "File Uploaded ✅",
         description: `${file.name} uploaded successfully.`
       });
     } catch (err: any) {
+      console.error("[Upload Error]", err);
       toast({
         title: "Upload Failed",
-        description: err.message || "Failed to upload file.",
+        description: err.message || "Failed to upload file. Please try again.",
         variant: "destructive"
       });
     } finally {

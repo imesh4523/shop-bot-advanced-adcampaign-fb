@@ -24,15 +24,19 @@ declare module "http" {
   }
 }
 
+// Trust the reverse proxy (Render, DO App Platform, etc.) so req.protocol = 'https'
+app.set('trust proxy', 1);
+
 app.use(
   express.json({
+    limit: '50mb',
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
   }),
 );
 
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
 
 

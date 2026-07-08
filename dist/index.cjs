@@ -96592,7 +96592,8 @@ ${extraInstructions}
       const filename = uniqueSuffix + import_path2.default.extname(req.file.originalname);
       const base64Data = req.file.buffer.toString("base64");
       await storage.saveUploadedFile(filename, req.file.mimetype, base64Data);
-      const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${filename}`;
+      const proto = req.headers["x-forwarded-proto"] || req.protocol;
+      const fileUrl = `${proto}://${req.get("host")}/uploads/${filename}`;
       res.json({
         fileUrl,
         filename: req.file.originalname,
@@ -103436,14 +103437,16 @@ var io = new import_socket.Server(httpServer, {
 io.on("connection", (socket) => {
   log(`Client connected: ${socket.id}`, "socket.io");
 });
+app.set("trust proxy", 1);
 app.use(
   import_express3.default.json({
+    limit: "50mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     }
   })
 );
-app.use(import_express3.default.urlencoded({ extended: false }));
+app.use(import_express3.default.urlencoded({ extended: false, limit: "50mb" }));
 app.use((req, res, next) => {
   const start = Date.now();
   const path4 = req.path;
