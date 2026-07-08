@@ -153,6 +153,8 @@ export default function SettingsPage() {
         req.onerror = () => reject(req.error);
       });
 
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+
       toast({
         title: "Passkey Registered",
         description: "This device is now registered. You can log in using Passkey on this device!",
