@@ -523,57 +523,61 @@ export async function registerRoutes(
     const initData = req.headers['x-telegram-init-data'] as string;
     const webUserId = req.headers['x-web-user-id'] as string;
 
-    if (!initData && !webUserId) {
+    const hasInitData = initData && initData !== "undefined" && initData !== "null" && initData.trim() !== "";
+    const hasWebUserId = webUserId && webUserId !== "undefined" && webUserId !== "null" && webUserId.trim() !== "";
+
+    if (!hasInitData && !hasWebUserId) {
       return res.status(401).json({ message: "No Telegram init data or web user ID provided" });
     }
 
-    if (initData) {
+    let isTelegramAuthed = false;
+
+    if (hasInitData) {
       const token = await storage.getSetting("TELEGRAM_BOT_TOKEN");
       const botToken = token?.value || process.env.TELEGRAM_BOT_TOKEN;
 
-      if (!botToken) {
-        return res.status(500).json({ message: "Bot token not configured" });
-      }
+      if (botToken) {
+        try {
+          // 1. Parse initData
+          const urlParams = new URLSearchParams(initData);
+          const hash = urlParams.get('hash');
+          urlParams.delete('hash');
 
-      try {
-        // 1. Parse initData
-        const urlParams = new URLSearchParams(initData);
-        const hash = urlParams.get('hash');
-        urlParams.delete('hash');
+          // 2. Sort keys alphabetically
+          const sortedParams = Array.from(urlParams.entries())
+            .map(([key, value]) => `${key}=${value}`)
+            .sort()
+            .join('\n');
 
-        // 2. Sort keys alphabetically
-        const sortedParams = Array.from(urlParams.entries())
-          .map(([key, value]) => `${key}=${value}`)
-          .sort()
-          .join('\n');
+          // 3. Verify hash
+          const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+          const calculatedHash = crypto.createHmac('sha256', secretKey).update(sortedParams).digest('hex');
 
-        // 3. Verify hash
-        const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
-        const calculatedHash = crypto.createHmac('sha256', secretKey).update(sortedParams).digest('hex');
-
-        if (calculatedHash !== hash) {
-          return res.status(401).json({ message: "Invalid Telegram authentication hash" });
+          if (calculatedHash === hash) {
+            // 4. Extract user info and attach to request
+            const userData = JSON.parse(urlParams.get('user') || '{}');
+            (req as any).tgUser = userData;
+            isTelegramAuthed = true;
+            return next();
+          }
+        } catch (err) {
+          console.error("MiniApp Auth Hash Verification Error:", err);
         }
-
-        // 4. Extract user info and attach to request
-        const userData = JSON.parse(urlParams.get('user') || '{}');
-        (req as any).tgUser = userData;
-
-        next();
-      } catch (err) {
-        console.error("MiniApp Auth Error:", err);
-        res.status(401).json({ message: "Authentication failed" });
       }
-    } else {
-      // Guest web user
+    }
+
+    // Fallback to Guest web user if Telegram auth failed or was not provided
+    if (!isTelegramAuthed && hasWebUserId) {
       (req as any).tgUser = {
         id: webUserId,
         first_name: "Web",
         last_name: "Guest",
         username: `web_${webUserId.substring(10, 16) || "user"}`
       };
-      next();
+      return next();
     }
+
+    return res.status(401).json({ message: "Authentication failed" });
   };
 
   // Send Verification Code (OTP) to email
@@ -1298,29 +1302,39 @@ export async function registerRoutes(
     const initData = req.headers['x-telegram-init-data'] as string;
     const webUserId = req.headers['x-web-user-id'] as string;
 
-    if (initData) {
+    const hasInitData = initData && initData !== "undefined" && initData !== "null" && initData.trim() !== "";
+    const hasWebUserId = webUserId && webUserId !== "undefined" && webUserId !== "null" && webUserId.trim() !== "";
+
+    let isTelegramAuthed = false;
+
+    if (hasInitData) {
       const token = await storage.getSetting("TELEGRAM_BOT_TOKEN");
       const botToken = token?.value || process.env.TELEGRAM_BOT_TOKEN;
-      if (!botToken) {
-        return res.status(500).json({ message: "Bot token not configured" });
-      }
-      try {
-        const urlParams = new URLSearchParams(initData);
-        const hash = urlParams.get('hash');
-        urlParams.delete('hash');
-        const sortedParams = Array.from(urlParams.entries())
-          .map(([key, value]) => `${key}=${value}`)
-          .sort()
-          .join('\n');
-        const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
-        const calculatedHash = crypto.createHmac('sha256', secretKey).update(sortedParams).digest('hex');
-        if (calculatedHash === hash) {
-          const userData = JSON.parse(urlParams.get('user') || '{}');
-          (req as any).tgUser = userData;
-          return next();
+      if (botToken) {
+        try {
+          const urlParams = new URLSearchParams(initData);
+          const hash = urlParams.get('hash');
+          urlParams.delete('hash');
+          const sortedParams = Array.from(urlParams.entries())
+            .map(([key, value]) => `${key}=${value}`)
+            .sort()
+            .join('\n');
+          const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+          const calculatedHash = crypto.createHmac('sha256', secretKey).update(sortedParams).digest('hex');
+          if (calculatedHash === hash) {
+            const userData = JSON.parse(urlParams.get('user') || '{}');
+            (req as any).tgUser = userData;
+            isTelegramAuthed = true;
+            return next();
+          }
+        } catch (err) {
+          console.error("verifySupportChatAuth Hash Check Error:", err);
         }
-      } catch (err) {}
-    } else if (webUserId) {
+      }
+    }
+
+    // Fallback to Guest web user if Telegram auth failed or was not provided
+    if (!isTelegramAuthed && hasWebUserId) {
       (req as any).tgUser = { id: webUserId, username: "web_guest", first_name: "Web", last_name: "Guest" };
       return next();
     }
