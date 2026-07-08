@@ -2467,6 +2467,10 @@ export default function MiniAppShop() {
                     ) : (
                       liveMessages.map((msg, i) => {
                         const isAdmin = msg.sender === "admin";
+                        const COPY_MARKER = "||COPY||";
+                        const hasCopyMarker = isAdmin && msg.message?.includes(COPY_MARKER);
+                        const displayMessage = hasCopyMarker ? msg.message.replace(COPY_MARKER, "").trimEnd() : msg.message;
+                        const copyText = displayMessage;
                         return (
                           <div key={msg.id || i} className={`flex flex-col w-full ${!isAdmin ? 'items-end' : 'items-start'} animate-in slide-in-from-bottom-2 duration-300`}>
                             <div className={`max-w-[85%] p-3 rounded-2xl text-[11px] leading-relaxed ${
@@ -2495,22 +2499,21 @@ export default function MiniAppShop() {
                                   <span className="truncate text-[9px] hover:underline">View PDF Document</span>
                                 </a>
                               )}
-                              {(!msg.attachmentUrl || (msg.message !== "📷 Photo Attachment" && msg.message !== "📄 PDF Attachment")) && (
-                                <div className="space-y-1 break-all">
-                                  {msg.message}
+                              {(!msg.attachmentUrl || (displayMessage !== "📷 Photo Attachment" && displayMessage !== "📄 PDF Attachment")) && (
+                                <div className="space-y-1 break-all whitespace-pre-wrap">
+                                  {displayMessage}
                                 </div>
                               )}
-                              {/* Copy button — only for admin messages with text */}
-                              {isAdmin && msg.message && msg.message !== "📷 Photo Attachment" && msg.message !== "📄 PDF Attachment" && (
+                              {/* Copy button — only shown when admin toggled "Copy Button: ON" for this template */}
+                              {hasCopyMarker && (
                                 <div className="mt-2 pt-1.5 border-t border-white/10 flex justify-end">
                                   <button
                                     onClick={() => {
-                                      navigator.clipboard.writeText(msg.message).then(() => {
+                                      navigator.clipboard.writeText(copyText).then(() => {
                                         toast({ title: "Copied!", description: "Message copied to clipboard." });
                                       }).catch(() => {
-                                        // fallback for older browsers
                                         const el = document.createElement("textarea");
-                                        el.value = msg.message;
+                                        el.value = copyText;
                                         document.body.appendChild(el);
                                         el.select();
                                         document.execCommand("copy");
@@ -2518,7 +2521,7 @@ export default function MiniAppShop() {
                                         toast({ title: "Copied!", description: "Message copied to clipboard." });
                                       });
                                     }}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-full text-[8px] font-bold uppercase tracking-wider transition-all active:scale-95"
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded-full text-[8px] font-bold uppercase tracking-wider transition-all active:scale-95"
                                     title="Copy message"
                                   >
                                     <Copy className="w-2.5 h-2.5" />

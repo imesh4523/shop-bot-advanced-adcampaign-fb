@@ -23,7 +23,8 @@ import {
   Settings,
   Paperclip,
   FileText,
-  X
+  X,
+  Copy
 } from "lucide-react";
 import { 
   Dialog, 
@@ -56,12 +57,20 @@ interface SupportMessage {
   createdAt: string;
 }
 
-const QUICK_REPLIES = [
-  "Hello! How can I help you today?",
-  "Please send the transaction ID (TXID / Hash) of your payment.",
-  "Your deposit has been verified! Please check your balance.",
-  "This account is currently out of stock. We will restock it shortly.",
-  "Thank you for contacting us! Let us know if you need anything else."
+// Quick reply template type — supports per-template copy toggle
+interface QuickReply {
+  text: string;
+  copyable: boolean;
+}
+
+const COPY_MARKER = "||COPY||";
+
+const DEFAULT_QUICK_REPLIES: QuickReply[] = [
+  { text: "Hello! How can I help you today?", copyable: false },
+  { text: "Please send the transaction ID (TXID / Hash) of your payment.", copyable: false },
+  { text: "Your deposit has been verified! Please check your balance.", copyable: false },
+  { text: "This account is currently out of stock. We will restock it shortly.", copyable: false },
+  { text: "Thank you for contacting us! Let us know if you need anything else.", copyable: false },
 ];
 
 export default function SupportChatPage() {
@@ -92,7 +101,7 @@ export default function SupportChatPage() {
 
   // States for customizing fast replies
   const [isEditingTemplates, setIsEditingTemplates] = useState(false);
-  const [editingList, setEditingList] = useState<string[]>([]);
+  const [editingList, setEditingList] = useState<QuickReply[]>([]);
 
   // 1. Fetch support chats list (4s interval to guarantee fresh fallback updates)
   const { data: chats = [], isLoading: isChatsLoading } = useQuery<SupportChat[]>({
@@ -118,12 +127,17 @@ export default function SupportChatPage() {
     queryKey: ["/api/settings/SUPPORT_QUICK_REPLIES"],
   });
 
-  let parsedQuickReplies = QUICK_REPLIES;
+  let parsedQuickReplies: QuickReply[] = DEFAULT_QUICK_REPLIES;
   if (quickRepliesSetting?.value) {
     try {
       const parsed = JSON.parse(quickRepliesSetting.value);
-      if (Array.isArray(parsed) && parsed.every(p => typeof p === 'string')) {
-        parsedQuickReplies = parsed;
+      if (Array.isArray(parsed)) {
+        // Support both old string[] format and new QuickReply[] format
+        if (parsed.every((p: any) => typeof p === 'string')) {
+          parsedQuickReplies = parsed.map((t: string) => ({ text: t, copyable: false }));
+        } else if (parsed.every((p: any) => typeof p === 'object' && 'text' in p)) {
+          parsedQuickReplies = parsed;
+        }
       }
     } catch (e) {
       console.error("Failed to parse custom quick replies setting:", e);
@@ -132,10 +146,10 @@ export default function SupportChatPage() {
 
   // 4. Save quick replies mutation
   const quickRepliesMutation = useMutation({
-    mutationFn: async (replies: string[]) => {
+    mutationFn: async (replies: QuickReply[]) => {
       const res = await apiRequest("POST", "/api/settings", {
         key: "SUPPORT_QUICK_REPLIES",
-        value: JSON.stringify(replies.filter(r => r.trim() !== ""))
+        value: JSON.stringify(replies.filter(r => r.text.trim() !== ""))
       });
       return res.json();
     },
@@ -618,10 +632,15 @@ export default function SupportChatPage() {
                   {parsedQuickReplies.map((reply, idx) => (
                     <button
                       key={idx}
-                      onClick={() => setReplyText(reply)}
-                      className="px-3.5 py-2 text-[11px] font-bold bg-white/[0.03] hover:bg-purple-600 hover:text-white border border-white/5 rounded-full text-white/70 whitespace-nowrap transition-all duration-300 animate-in fade-in"
+                      onClick={() => setReplyText(reply.copyable ? `${reply.text}${COPY_MARKER}` : reply.text)}
+                      className="group px-3.5 py-2 text-[11px] font-bold bg-white/[0.03] hover:bg-purple-600 hover:text-white border border-white/5 rounded-full text-white/70 whitespace-nowrap transition-all duration-300 animate-in fade-in flex items-center gap-1.5"
                     >
-                      {reply}
+                      {reply.text}
+                      {reply.copyable && (
+                        <span title="Shows copy button for user" className="text-purple-400 group-hover:text-white/70">
+                          <Copy className="w-2.5 h-2.5" />
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -726,19 +745,38 @@ export default function SupportChatPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 my-4 max-h-[300px] overflow-y-auto pr-1">
+          <div className="space-y-4 my-4 max-h-[360px] overflow-y-auto pr-1">
             {editingList.map((template, idx) => (
-              <div key={idx} className="flex gap-2 items-center">
-                <Input
-                  value={template}
-                  onChange={(e) => {
-                    const updated = [...editingList];
-                    updated[idx] = e.target.value;
-                    setEditingList(updated);
-                  }}
-                  placeholder="Enter template text..."
-                  className="bg-white/[0.03] border-white/10 rounded-xl text-sm"
-                />
+              <div key={idx} className="flex gap-2 items-start p-3 bg-white/[0.02] rounded-xl border border-white/5">
+                <div className="flex-1 space-y-2">
+                  <Input
+                    value={template.text}
+                    onChange={(e) => {
+                      const updated = [...editingList];
+                      updated[idx] = { ...updated[idx], text: e.target.value };
+                      setEditingList(updated);
+                    }}
+                    placeholder="Enter template text..."
+                    className="bg-white/[0.03] border-white/10 rounded-xl text-sm"
+                  />
+                  {/* Copy toggle */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = [...editingList];
+                      updated[idx] = { ...updated[idx], copyable: !updated[idx].copyable };
+                      setEditingList(updated);
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all ${
+                      template.copyable
+                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                        : 'bg-white/5 text-white/30 border border-white/10 hover:border-white/20'
+                    }`}
+                  >
+                    <Copy className="w-2.5 h-2.5" />
+                    {template.copyable ? 'Copy Button: ON' : 'Copy Button: OFF'}
+                  </button>
+                </div>
                 <Button
                   variant="ghost"
                   onClick={() => {
@@ -746,7 +784,7 @@ export default function SupportChatPage() {
                     updated.splice(idx, 1);
                     setEditingList(updated);
                   }}
-                  className="hover:bg-red-500/10 text-red-400 hover:text-red-300 p-2 shrink-0 rounded-xl h-10 w-10 flex items-center justify-center"
+                  className="hover:bg-red-500/10 text-red-400 hover:text-red-300 p-2 shrink-0 rounded-xl h-10 w-10 flex items-center justify-center mt-0.5"
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -760,7 +798,7 @@ export default function SupportChatPage() {
           <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/5">
             <Button
               variant="outline"
-              onClick={() => setEditingList([...editingList, ""])}
+              onClick={() => setEditingList([...editingList, { text: "", copyable: false }])}
               className="border-white/10 hover:bg-white/[0.05] rounded-xl flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"
             >
               <Plus className="w-4 h-4" />
