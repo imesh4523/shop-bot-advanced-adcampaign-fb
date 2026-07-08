@@ -55831,21 +55831,36 @@ var init_storage = __esm({
       }
       async getSupportChats() {
         const messages = await db.select().from(supportMessages).orderBy(desc(supportMessages.createdAt));
-        const chatsMap = /* @__PURE__ */ new Map();
+        const grouped = /* @__PURE__ */ new Map();
         for (const m of messages) {
-          if (!chatsMap.has(m.telegramId)) {
-            chatsMap.set(m.telegramId, {
-              telegramId: m.telegramId,
-              username: m.username,
-              firstName: m.firstName,
-              lastName: m.lastName,
-              lastMessage: m.message,
-              lastMessageAt: m.createdAt,
-              lastSender: m.sender
-            });
+          if (!grouped.has(m.telegramId)) {
+            grouped.set(m.telegramId, []);
           }
+          grouped.get(m.telegramId).push(m);
         }
-        return Array.from(chatsMap.values());
+        const chatsList = [];
+        for (const [telegramId, msgs] of grouped.entries()) {
+          const lastMsg = msgs[0];
+          let pendingCount = 0;
+          for (const m of msgs) {
+            if (m.sender === "user") {
+              pendingCount++;
+            } else {
+              break;
+            }
+          }
+          chatsList.push({
+            telegramId,
+            username: lastMsg.username,
+            firstName: lastMsg.firstName,
+            lastName: lastMsg.lastName,
+            lastMessage: lastMsg.message,
+            lastMessageAt: lastMsg.createdAt,
+            lastSender: lastMsg.sender,
+            pendingCount
+          });
+        }
+        return chatsList.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
       }
       // Checked IPs Implementation
       async getCheckedIps() {
@@ -98921,7 +98936,24 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
   app2.get("/api/support/messages/:telegramId", isAuth, async (req, res) => {
     try {
       const { telegramId } = req.params;
-      const messages = await storage.getSupportMessages(telegramId);
+      let messages = await storage.getSupportMessages(telegramId);
+      if (messages.length > 0) {
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg.sender === "user" && !lastMsg.message.includes("Support Agent has joined")) {
+          const joinMsg = await storage.saveSupportMessage({
+            telegramId,
+            message: "\u{1F44B} Support Agent has joined the chat. How can we assist you?",
+            sender: "admin",
+            username: "Admin",
+            firstName: "Admin",
+            lastName: "",
+            attachmentUrl: null,
+            attachmentType: null
+          });
+          messages.push(joinMsg);
+          io2.emit("support_message", joinMsg);
+        }
+      }
       res.json(messages);
     } catch (err) {
       console.error("Failed to get support messages:", err);

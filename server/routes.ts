@@ -4240,7 +4240,27 @@ app.get("/api/support/chats", isAuth, async (req, res) => {
 app.get("/api/support/messages/:telegramId", isAuth, async (req, res) => {
   try {
     const { telegramId } = req.params;
-    const messages = await storage.getSupportMessages(telegramId);
+    let messages = await storage.getSupportMessages(telegramId);
+
+    // Auto-inject agent joined system message if last message is from user
+    if (messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg.sender === "user" && !lastMsg.message.includes("Support Agent has joined")) {
+        const joinMsg = await storage.saveSupportMessage({
+          telegramId,
+          message: "👋 Support Agent has joined the chat. How can we assist you?",
+          sender: "admin",
+          username: "Admin",
+          firstName: "Admin",
+          lastName: "",
+          attachmentUrl: null,
+          attachmentType: null
+        });
+        messages.push(joinMsg);
+        io.emit("support_message", joinMsg);
+      }
+    }
+
     res.json(messages);
   } catch (err) {
     console.error("Failed to get support messages:", err);

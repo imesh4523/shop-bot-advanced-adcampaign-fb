@@ -316,6 +316,31 @@ export default function SupportChatPage() {
     }
   };
 
+  const handleDeleteThread = async (telegramId: string) => {
+    if (!confirm("Are you sure you want to permanently delete this entire chat conversation thread?")) return;
+    try {
+      const res = await fetch(`/api/support/chats/${telegramId}`, {
+        method: "DELETE"
+      });
+      if (!res.ok) throw new Error("Failed to clear chat");
+      
+      toast({
+        title: "Chat Deleted",
+        description: "Chat conversation thread has been deleted successfully."
+      });
+      if (selectedChatId === telegramId) {
+        setSelectedChatId(null);
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/support/chats"] });
+    } catch (err: any) {
+      toast({
+        title: "Action Failed",
+        description: err.message,
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleClearChat = async () => {
     if (!selectedChatId) return;
     if (!confirm("Are you sure you want to permanently clear this chat history?")) return;
@@ -466,35 +491,57 @@ export default function SupportChatPage() {
                 {filteredChats.map((chat) => {
                   const isSelected = selectedChatId === chat.telegramId;
                   return (
-                    <button
+                    <div
                       key={chat.telegramId}
-                      onClick={() => setSelectedChatId(chat.telegramId)}
-                      className={`w-full p-4 flex gap-4 text-left transition-all duration-300 items-start ${
+                      className={`w-full relative group flex items-start border-l-4 transition-all duration-300 ${
                         isSelected 
-                          ? 'bg-purple-950/20 border-l-4 border-purple-500' 
-                          : 'hover:bg-white/[0.02] border-l-4 border-transparent'
+                          ? 'bg-purple-950/20 border-purple-500' 
+                          : 'hover:bg-white/[0.02] border-transparent'
                       }`}
                     >
-                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-tr ${getAvatarBg(chat)} flex items-center justify-center font-bold text-white shadow-md text-sm shrink-0`}>
-                        {getAvatarInitials(chat)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-baseline mb-1">
-                          <span className="font-extrabold text-sm text-white truncate">
-                            {chat.firstName ? `${chat.firstName} ${chat.lastName || ""}`.trim() : `@${chat.username || chat.telegramId}`}
-                          </span>
-                          <span className="text-[10px] text-white/30 font-semibold uppercase shrink-0">
-                            {chat.lastMessageAt ? format(new Date(chat.lastMessageAt), "hh:mm a") : ""}
-                          </span>
+                      <button
+                        onClick={() => setSelectedChatId(chat.telegramId)}
+                        className="flex-1 p-4 flex gap-4 text-left items-start"
+                      >
+                        <div className={`w-11 h-11 rounded-xl bg-gradient-to-tr ${getAvatarBg(chat)} flex items-center justify-center font-bold text-white shadow-md text-sm shrink-0`}>
+                          {getAvatarInitials(chat)}
                         </div>
-                        {chat.username && (
-                          <span className="text-xs text-purple-400/80 font-bold block mb-1">@{chat.username}</span>
-                        )}
-                        <p className="text-xs text-white/50 truncate leading-relaxed">
-                          {chat.lastMessage}
-                        </p>
-                      </div>
-                    </button>
+                        <div className="flex-1 min-w-0 pr-6">
+                          <div className="flex justify-between items-baseline mb-1">
+                            <span className="font-extrabold text-sm text-white truncate">
+                              {chat.firstName ? `${chat.firstName} ${chat.lastName || ""}`.trim() : `@${chat.username || chat.telegramId}`}
+                            </span>
+                            <span className="text-[10px] text-white/30 font-semibold uppercase shrink-0">
+                              {chat.lastMessageAt ? format(new Date(chat.lastMessageAt), "hh:mm a") : ""}
+                            </span>
+                          </div>
+                          {chat.username && (
+                            <span className="text-xs text-purple-400/80 font-bold block mb-1">@{chat.username}</span>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs text-white/50 truncate leading-relaxed flex-1">
+                              {chat.lastMessage}
+                            </p>
+                            {chat.pendingCount > 0 && (
+                              <span className="shrink-0 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[9px] font-black text-white bg-red-500 rounded-full shadow-md animate-pulse">
+                                {chat.pendingCount}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                      
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteThread(chat.telegramId);
+                        }}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-neutral-950 text-white/30 hover:text-red-400 hover:bg-red-500/10 border border-white/5 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-300"
+                        title="Delete Conversation"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   );
                 })}
               </div>

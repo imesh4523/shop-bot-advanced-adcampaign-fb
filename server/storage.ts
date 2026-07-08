@@ -161,7 +161,7 @@ export interface IStorage {
   // Support Messages
   saveSupportMessage(msg: InsertSupportMessage): Promise<SupportMessage>;
   getSupportMessages(telegramId?: string): Promise<SupportMessage[]>;
-  getSupportChats(): Promise<{ telegramId: string; username: string | null; firstName: string | null; lastName: string | null; lastMessage: string; lastMessageAt: Date; lastSender: string }[]>;
+  getSupportChats(): Promise<{ telegramId: string; username: string | null; firstName: string | null; lastName: string | null; lastMessage: string; lastMessageAt: Date; lastSender: string; pendingCount: number }[]>;
 
   // Checked IPs
   getCheckedIps(): Promise<CheckedIp[]>;
@@ -859,23 +859,46 @@ export class DatabaseStorage implements IStorage {
     return await query.orderBy(supportMessages.createdAt);
   }
 
-  async getSupportChats(): Promise<{ telegramId: string; username: string | null; firstName: string | null; lastName: string | null; lastMessage: string; lastMessageAt: Date; lastSender: string }[]> {
+  async getSupportChats(): Promise<{ telegramId: string; username: string | null; firstName: string | null; lastName: string | null; lastMessage: string; lastMessageAt: Date; lastSender: string; pendingCount: number }[]> {
     const messages = await db.select().from(supportMessages).orderBy(desc(supportMessages.createdAt));
-    const chatsMap = new Map<string, any>();
+    
+    // Group messages by telegramId (maintaining desc order)
+    const grouped = new Map<string, typeof messages>();
     for (const m of messages) {
-      if (!chatsMap.has(m.telegramId)) {
-        chatsMap.set(m.telegramId, {
-          telegramId: m.telegramId,
-          username: m.username,
-          firstName: m.firstName,
-          lastName: m.lastName,
-          lastMessage: m.message,
-          lastMessageAt: m.createdAt,
-          lastSender: m.sender
-        });
+      if (!grouped.has(m.telegramId)) {
+        grouped.set(m.telegramId, []);
       }
+      grouped.get(m.telegramId)!.push(m);
     }
-    return Array.from(chatsMap.values());
+
+    const chatsList = [];
+    for (const [telegramId, msgs] of grouped.entries()) {
+      const lastMsg = msgs[0];
+      
+      // Count pending user messages at the start of desc list
+      let pendingCount = 0;
+      for (const m of msgs) {
+        if (m.sender === 'user') {
+          pendingCount++;
+        } else {
+          break; // Stop counting once we hit an admin message
+        }
+      }
+
+      chatsList.push({
+        telegramId,
+        username: lastMsg.username,
+        firstName: lastMsg.firstName,
+        lastName: lastMsg.lastName,
+        lastMessage: lastMsg.message,
+        lastMessageAt: lastMsg.createdAt,
+        lastSender: lastMsg.sender,
+        pendingCount
+      });
+    }
+
+    // Sort chats by lastMessageAt descending
+    return chatsList.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
   }
 
   // Checked IPs Implementation

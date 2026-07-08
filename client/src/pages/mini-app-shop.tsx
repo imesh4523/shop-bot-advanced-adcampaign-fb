@@ -2580,6 +2580,16 @@ export default function MiniAppShop() {
                     )}
                   </>
                 )}
+                {chatMode === "human" && liveMessages.length > 0 && liveMessages[liveMessages.length - 1].sender === 'user' && (
+                  <div className="flex flex-col items-center justify-center p-5 bg-purple-950/10 border border-purple-500/20 rounded-2xl gap-3 animate-pulse mt-4">
+                    <div className="relative flex items-center justify-center">
+                      <span className="animate-ping absolute inline-flex h-4 w-4 rounded-full bg-purple-500 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-purple-600"></span>
+                    </div>
+                    <span className="text-[10px] font-black uppercase text-purple-400 tracking-wider">Connecting to Live Agent...</span>
+                    <span className="text-[8px] text-white/40 text-center font-medium leading-relaxed">We have notified our support agents. Please wait while we join your chat.</span>
+                  </div>
+                )}
                 {isSendingChat && (
                   <div className="flex justify-start">
                     <div className="bg-white/5 p-3 rounded-2xl rounded-tl-none border border-white/10">
