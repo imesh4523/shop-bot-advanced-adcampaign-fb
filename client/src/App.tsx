@@ -31,6 +31,7 @@ const IpManagerPage = lazy(() => import("@/pages/ip-manager-page"));
 const ImageSectionPage = lazy(() => import("@/pages/image-section-page"));
 const MiniAppShop = lazy(() => import("@/pages/mini-app-shop"));
 const OpenVpnPage = lazy(() => import("@/pages/openvpn-page"));
+const CategoryOrderPage = lazy(() => import("@/pages/category-order-page"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 function PageLoader() {
@@ -167,6 +168,10 @@ function Router() {
 
         <Route path="/main-admin/openvpn">
           <ProtectedRoute component={OpenVpnPage} />
+        </Route>
+
+        <Route path="/main-admin/category-order">
+          <ProtectedRoute component={CategoryOrderPage} />
         </Route>
 
         {/* Fallback to 404 */}

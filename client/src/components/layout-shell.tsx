@@ -21,6 +21,7 @@ import {
   MessageSquare,
   Image,
   Shield,
+  ListOrdered,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     { name: 'Broadcast', href: '/main-admin/broadcast', icon: Megaphone },
     { name: 'Email Campaign', href: '/main-admin/email-campaign', icon: Mail },
     { name: 'Products', href: '/main-admin/products', icon: Package },
+    { name: 'Category Order', href: '/main-admin/category-order', icon: ListOrdered },
     { name: 'Inventory', href: '/main-admin/inventory', icon: Package },
     { name: 'Orders', href: '/main-admin/orders', icon: ShoppingCart },
     { name: 'Payments', href: '/main-admin/payments', icon: User },

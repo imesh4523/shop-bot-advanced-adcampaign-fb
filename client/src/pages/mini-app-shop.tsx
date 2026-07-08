@@ -398,6 +398,56 @@ export default function MiniAppShop() {
     queryKey: ["/api/settings/CURRENCY_RATE_LKR"]
   });
 
+  const { data: categoryOrderSetting } = useQuery<{ value: string }>({
+    queryKey: ["/api/settings/CATEGORY_ORDER"]
+  });
+
+  const renderCategoryIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'Aws': return <FaAws className="w-4 h-4" />;
+      case 'Digitalocean': return <SiDigitalocean className="w-4 h-4" />;
+      case 'Azure': return <VscAzure className="w-4 h-4" />;
+      case 'Googlecloud': return <SiGooglecloud className="w-4 h-4" />;
+      case 'Vultr': return <SiVultr className="w-4 h-4" />;
+      case 'Hetzner': return <SiHetzner className="w-4 h-4" />;
+      case 'Database': return <Database className="w-4 h-4" />;
+      case 'Openai': return <SiOpenai className="w-4 h-4" style={{color:'#10a37f'}} />;
+      case 'Claude': return <SiClaude className="w-4 h-4" style={{color:'#D4A574'}} />;
+      case 'Googlegemini': return <SiGooglegemini className="w-4 h-4" style={{color:'#4285F4'}} />;
+      case 'Cursor': return <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none"><rect width="24" height="24" rx="6" fill="#000"/><path d="M12 4L20 19H4L12 4Z" fill="white"/></svg>;
+      case 'Capcut': return <svg viewBox="0 0 24 24" className="w-4 h-4"><rect width="24" height="24" rx="4" fill="#000"/><path d="M7 7h4v10H7zM13 7h4v10h-4z" fill="white"/></svg>;
+      default: return <Package className="w-4 h-4" />;
+    }
+  };
+
+  const shopCategories = (() => {
+    if (categoryOrderSetting?.value) {
+      try {
+        const parsed = JSON.parse(categoryOrderSetting.value);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error("Failed to parse CATEGORY_ORDER setting:", e);
+      }
+    }
+    return [
+      { id: 'all', label: 'All', icon: 'Package' },
+      { id: 'aws', label: 'AWS', icon: 'Aws' },
+      { id: 'digitalocean', label: 'DO', icon: 'Digitalocean' },
+      { id: 'azure', label: 'Azure', icon: 'Azure' },
+      { id: 'google', label: 'GCP', icon: 'Googlecloud' },
+      { id: 'vultr', label: 'Vultr', icon: 'Vultr' },
+      { id: 'hetzner', label: 'Hetzner', icon: 'Hetzner' },
+      { id: 'oracle', label: 'Oracle', icon: 'Database' },
+      { id: 'chatgpt', label: 'ChatGPT', icon: 'Openai' },
+      { id: 'claude', label: 'Claude', icon: 'Claude' },
+      { id: 'gemini', label: 'Gemini', icon: 'Googlegemini' },
+      { id: 'cursor', label: 'Cursor', icon: 'Cursor' },
+      { id: 'capcut', label: 'CapCut', icon: 'Capcut' }
+    ];
+  })();
+
   // Live Binance P2P rate — refreshed every 5 minutes via server cache
   const { data: p2pRateData } = useQuery<{ rate: number; cached: boolean; fetchedAt?: number }>({
     queryKey: ["/api/mini/p2p-rate"],
@@ -1495,21 +1545,7 @@ export default function MiniAppShop() {
 
         {/* Category Filter Chips */}
         <div className="flex items-center gap-3 overflow-x-auto pb-2 px-1 scrollbar-hide no-scrollbar">
-          {[
-            { id: 'all', label: 'All', icon: <Package className="w-4 h-4" /> },
-            { id: 'aws', label: 'AWS', icon: <FaAws className="w-4 h-4" /> },
-            { id: 'digitalocean', label: 'DO', icon: <SiDigitalocean className="w-4 h-4" /> },
-            { id: 'azure', label: 'Azure', icon: <VscAzure className="w-4 h-4" /> },
-            { id: 'google', label: 'GCP', icon: <SiGooglecloud className="w-4 h-4" /> },
-            { id: 'vultr', label: 'Vultr', icon: <SiVultr className="w-4 h-4" /> },
-            { id: 'hetzner', label: 'Hetzner', icon: <SiHetzner className="w-4 h-4" /> },
-            { id: 'oracle', label: 'Oracle', icon: <Database className="w-4 h-4" /> },
-            { id: 'chatgpt', label: 'ChatGPT', icon: <SiOpenai className="w-4 h-4" style={{color:'#10a37f'}} /> },
-            { id: 'claude', label: 'Claude', icon: <SiClaude className="w-4 h-4" style={{color:'#D4A574'}} /> },
-            { id: 'gemini', label: 'Gemini', icon: <SiGooglegemini className="w-4 h-4" style={{color:'#4285F4'}} /> },
-            { id: 'cursor', label: 'Cursor', icon: <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none"><rect width="24" height="24" rx="6" fill="#000"/><path d="M12 4L20 19H4L12 4Z" fill="white"/></svg> },
-            { id: 'capcut', label: 'CapCut', icon: <svg viewBox="0 0 24 24" className="w-4 h-4"><rect width="24" height="24" rx="4" fill="#000"/><path d="M7 7h4v10H7zM13 7h4v10h-4z" fill="white"/></svg> },
-          ].map((cat) => (
+          {shopCategories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
@@ -1519,7 +1555,7 @@ export default function MiniAppShop() {
                   : 'bg-white dark:bg-card text-neutral-400 border border-purple-50/50 dark:border-white/5'
               }`}
             >
-              {cat.icon}
+              {renderCategoryIcon(cat.icon)}
               {cat.label}
             </button>
           ))}

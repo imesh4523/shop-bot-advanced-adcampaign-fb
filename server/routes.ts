@@ -4179,7 +4179,8 @@ app.post("/api/settings", isAuth, async (req, res) => {
       "DIGITALOCEAN_API_KEY",
       "OPENVPN_DEFAULT_REGION",
       "OPENVPN_DEFAULT_SIZE",
-      "GOOGLE_VERTEX_KEY"
+      "GOOGLE_VERTEX_KEY",
+      "CATEGORY_ORDER"
     ];
 
     if (!whitelistedKeys.includes(key)) {
@@ -4345,7 +4346,8 @@ const PUBLIC_SETTINGS_KEYS = [
   "BANNER_IMAGES",
   "THEME_COLOR",
   "GOOGLE_CLIENT_ID",
-  "GOOGLE_LOGIN_ENABLED"
+  "GOOGLE_LOGIN_ENABLED",
+  "CATEGORY_ORDER"
 ];
 
 app.get("/api/settings/:key", async (req, res, next) => {
