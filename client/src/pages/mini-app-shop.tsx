@@ -2331,15 +2331,18 @@ export default function MiniAppShop() {
                           </div>
                           {showContactBtn && (
                             <div className="mt-2 pt-2 border-t border-white/10 flex justify-start">
-                              <a 
-                                href={getTelegramLink(supportUsername)} 
-                                target="_blank" 
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white rounded-full text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-md shadow-purple-900/40"
+                              <button 
+                                onClick={handleRequestHuman}
+                                disabled={isRequestingHuman}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white rounded-full text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-md shadow-purple-900/40 disabled:opacity-50"
                               >
-                                <FaTelegram className="w-3 h-3 text-white" />
-                                <span>Contact Us</span>
-                              </a>
+                                {isRequestingHuman ? (
+                                  <Loader2 className="w-3 h-3 animate-spin text-white" />
+                                ) : (
+                                  <MessageCircle className="w-3 h-3 text-white" />
+                                )}
+                                <span>Contact Agent</span>
+                              </button>
                             </div>
                           )}
                         </div>
