@@ -381,6 +381,13 @@ function hexToHsl(hex: string): string {
 export default function MiniAppShop() {
   const { theme } = useTheme();
   const { toast } = useToast();
+  const { data: user, isLoading: userLoading } = useQuery<TelegramUser>({
+    queryKey: ["/api/mini/user"],
+    queryFn: async () => {
+      const res = await miniApiRequest("GET", "/api/mini/user");
+      return res.json();
+    }
+  });
 
   // Immediately set body background on first render (before useEffect) to avoid flash
   const isDarkMode = theme === "dark" || (theme === "system" && typeof window !== 'undefined' && window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -794,13 +801,7 @@ export default function MiniAppShop() {
     });
   };
 
-  const { data: user, isLoading: userLoading } = useQuery<TelegramUser>({
-    queryKey: ["/api/mini/user"],
-    queryFn: async () => {
-      const res = await miniApiRequest("GET", "/api/mini/user");
-      return res.json();
-    }
-  });
+
 
   // Branding Settings
   const { data: storeNameSetting } = useQuery<{ value: string }>({
