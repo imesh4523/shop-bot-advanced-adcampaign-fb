@@ -161,7 +161,7 @@ export interface IStorage {
   // Support Messages
   saveSupportMessage(msg: InsertSupportMessage): Promise<SupportMessage>;
   getSupportMessages(telegramId?: string): Promise<SupportMessage[]>;
-  getSupportChats(): Promise<{ telegramId: string; username: string | null; firstName: string | null; lastName: string | null; lastMessage: string; lastMessageAt: Date }[]>;
+  getSupportChats(): Promise<{ telegramId: string; username: string | null; firstName: string | null; lastName: string | null; lastMessage: string; lastMessageAt: Date; lastSender: string }[]>;
 
   // Checked IPs
   getCheckedIps(): Promise<CheckedIp[]>;
@@ -859,7 +859,7 @@ export class DatabaseStorage implements IStorage {
     return await query.orderBy(supportMessages.createdAt);
   }
 
-  async getSupportChats(): Promise<{ telegramId: string; username: string | null; firstName: string | null; lastName: string | null; lastMessage: string; lastMessageAt: Date }[]> {
+  async getSupportChats(): Promise<{ telegramId: string; username: string | null; firstName: string | null; lastName: string | null; lastMessage: string; lastMessageAt: Date; lastSender: string }[]> {
     const messages = await db.select().from(supportMessages).orderBy(desc(supportMessages.createdAt));
     const chatsMap = new Map<string, any>();
     for (const m of messages) {
@@ -870,7 +870,8 @@ export class DatabaseStorage implements IStorage {
           firstName: m.firstName,
           lastName: m.lastName,
           lastMessage: m.message,
-          lastMessageAt: m.createdAt
+          lastMessageAt: m.createdAt,
+          lastSender: m.sender
         });
       }
     }

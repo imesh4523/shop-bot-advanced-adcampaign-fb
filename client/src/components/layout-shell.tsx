@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Package,
@@ -48,9 +49,18 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
+  // Fetch unique support chats to get the pending/unread messages count
+  const { data: supportChats = [] } = useQuery<any[]>({
+    queryKey: ["/api/support/chats"],
+    refetchInterval: 8000, // Refresh count every 8 seconds
+    enabled: !!user,
+  });
+
+  const pendingChatsCount = supportChats.filter(c => c.lastSender === 'user').length;
+
   const navigation = [
     { name: 'Dashboard', href: '/main-admin', icon: LayoutDashboard },
-    { name: 'Image Section', href: '/main-admin/image-section', icon: Image },
+    { name: 'Live Support', href: '/main-admin/support', icon: MessageSquare },
     { name: 'Broadcast', href: '/main-admin/broadcast', icon: Megaphone },
     { name: 'Email Campaign', href: '/main-admin/email-campaign', icon: Mail },
     { name: 'Products', href: '/main-admin/products', icon: Package },
@@ -66,7 +76,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     { name: 'Auto Forward', href: '/main-admin/forward', icon: Share2 },
     { name: 'Domain & Email', href: '/main-admin/domain-email', icon: Globe },
     { name: 'IP Manager', href: '/main-admin/ip-manager', icon: Globe },
-    { name: 'Live Support', href: '/main-admin/support', icon: MessageSquare },
+    { name: 'Image Section', href: '/main-admin/image-section', icon: Image },
     { name: 'OpenVPN Servers', href: '/main-admin/openvpn', icon: Shield },
     { name: 'Settings', href: '/main-admin/settings', icon: Settings },
   ];
@@ -85,6 +95,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
         <nav className="grid gap-3 px-4">
           {navigation.map((item) => {
             const isActive = location === item.href;
+            const hasBadge = item.name === 'Live Support' && pendingChatsCount > 0;
             return (
               <Link
                 key={item.name}
@@ -99,7 +110,12 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                 onClick={() => setIsMobileOpen(false)}
               >
                 <item.icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-purple-400' : 'text-white/30'}`} />
-                {item.name}
+                <span className="flex-1 truncate">{item.name}</span>
+                {hasBadge && (
+                  <span className="shrink-0 flex items-center justify-center w-5 h-5 text-[10px] font-black text-white bg-red-500 rounded-full animate-pulse shadow-md shadow-red-500/20">
+                    {pendingChatsCount}
+                  </span>
+                )}
               </Link>
             );
           })}

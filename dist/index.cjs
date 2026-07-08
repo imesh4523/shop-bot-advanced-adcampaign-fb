@@ -55840,7 +55840,8 @@ var init_storage = __esm({
               firstName: m.firstName,
               lastName: m.lastName,
               lastMessage: m.message,
-              lastMessageAt: m.createdAt
+              lastMessageAt: m.createdAt,
+              lastSender: m.sender
             });
           }
         }
