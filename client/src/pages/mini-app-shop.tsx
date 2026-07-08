@@ -1287,7 +1287,7 @@ export default function MiniAppShop() {
   }, [googleEnabled, googleClientId, isGuest, isLoginDialogOpen]);
 
   const storeName = storeNameSetting?.value || "Shopeefy";
-  const supportUsername = supportUsernameSetting?.value || "@rochana_imesh";
+  const supportUsername = supportUsernameSetting?.value || "@support";
   const supportBtnText = supportBtnTextSetting?.value || "Write to Support";
   const loadingText = loadingTextSetting?.value || "Shopeefy...";
   const minDepositLimit = minDepositSetting?.value ? parseFloat(minDepositSetting.value) : 1.0;

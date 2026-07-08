@@ -55378,7 +55378,7 @@ var init_storage = __esm({
         }
         const defaultSettings = [
           { key: "STORE_NAME", value: "Shopeefy" },
-          { key: "SUPPORT_USERNAME", value: "@rochana_imesh" },
+          { key: "SUPPORT_USERNAME", value: "@support" },
           { key: "SUPPORT_BTN_TEXT", value: "Write to Support" },
           { key: "LOADING_TEXT", value: "Shopeefy..." },
           { key: "TRC20_WALLET_ADDRESS", value: "" },
@@ -55387,7 +55387,8 @@ var init_storage = __esm({
           { key: "PAYMENT_APTOS_ENABLED", value: "false" },
           { key: "TRC20_VERIFICATION_MODE", value: "binance" },
           { key: "APTOS_VERIFICATION_MODE", value: "binance" },
-          { key: "MIN_DEPOSIT_LIMIT", value: "1.00" }
+          { key: "MIN_DEPOSIT_LIMIT", value: "1.00" },
+          { key: "DEFAULT_THEME", value: "dark" }
         ];
         for (const s of defaultSettings) {
           const existing = await db.select().from(settings).where(eq(settings.key, s.key));
@@ -96161,7 +96162,10 @@ async function registerRoutes(httpServer2, app2, io2) {
 `;
         });
       }
-      summary += "\nSUPPORT CONTACT: @rochana_imesh on Telegram.";
+      const supportUsernameSetting = await storage.getSetting("SUPPORT_USERNAME");
+      const supportUsername = supportUsernameSetting?.value || "@support";
+      summary += `
+SUPPORT CONTACT: ${supportUsername} on Telegram.`;
       if (req.headers.accept?.includes("text/plain")) {
         res.header("Content-Type", "text/plain");
         return res.send(summary);
@@ -96308,7 +96312,7 @@ async function registerRoutes(httpServer2, app2, io2) {
       const extraInstructionsSetting = await storage.getSetting("EXTRA_INSTRUCTIONS");
       const lkrRateSetting = await storage.getSetting("CURRENCY_RATE_LKR");
       const storeName = storeNameSetting?.value || "ShopBot";
-      const supportUsername = supportUsernameSetting?.value || "@rochana_imesh";
+      const supportUsername = supportUsernameSetting?.value || "@support";
       const faq = faqSetting?.value || "No special instructions. Direct them to support if needed.";
       const extraInstructions = extraInstructionsSetting?.value || "";
       const lkrRate = parseFloat(lkrRateSetting?.value || "0") || 0;
@@ -101811,7 +101815,7 @@ You can now connect via SSH.`);
         }
       } else if (normalizedText === supportBtnText || normalizedText?.includes(supportBtnText)) {
         const supportUsernameSetting = await storage.getSetting("SUPPORT_USERNAME");
-        const supportUsername = supportUsernameSetting?.value || "@rochana_imesh";
+        const supportUsername = supportUsernameSetting?.value || "@support";
         const cleanUsername = supportUsername.replace("@", "");
         targetBot.sendMessage(chatId, `<tg-emoji emoji-id="5461151367559141950">\u{1F4E9}</tg-emoji> <b>For support, please contact us below:</b>`, {
           parse_mode: "HTML",
@@ -101824,7 +101828,7 @@ You can now connect via SSH.`);
       } else if (normalizedText === "\u2753 FAQ") {
         const userName = tgUser?.firstName || "User";
         const supportUsernameSetting = await storage.getSetting("SUPPORT_USERNAME");
-        const supportUsername = supportUsernameSetting?.value || "@rochana_imesh";
+        const supportUsername = supportUsernameSetting?.value || "@support";
         const rulesMessage = `<tg-emoji emoji-id="5413554183502572090">\u{1F44B}</tg-emoji> <b>Welcome, ${userName}</b> <tg-emoji emoji-id="5413554183502572090">\u2728</tg-emoji>
 
 <tg-emoji emoji-id="5213181173026533794">\u26A0\uFE0F</tg-emoji> <b>STORE RULES \u2013 PLEASE READ BEFORE BUYING</b> <tg-emoji emoji-id="5213181173026533794">\u26A0\uFE0F</tg-emoji>

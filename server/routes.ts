@@ -887,7 +887,9 @@ export async function registerRoutes(
         });
       }
 
-      summary += "\nSUPPORT CONTACT: @rochana_imesh on Telegram.";
+      const supportUsernameSetting = await storage.getSetting("SUPPORT_USERNAME");
+      const supportUsername = supportUsernameSetting?.value || "@support";
+      summary += `\nSUPPORT CONTACT: ${supportUsername} on Telegram.`;
 
       // Return both as plain text (easier for AI) and structured JSON
       if (req.headers.accept?.includes('text/plain')) {
@@ -1077,7 +1079,7 @@ export async function registerRoutes(
       const lkrRateSetting = await storage.getSetting("CURRENCY_RATE_LKR");
 
       const storeName = storeNameSetting?.value || "ShopBot";
-      const supportUsername = supportUsernameSetting?.value || "@rochana_imesh";
+      const supportUsername = supportUsernameSetting?.value || "@support";
       const faq = faqSetting?.value || "No special instructions. Direct them to support if needed.";
       const extraInstructions = extraInstructionsSetting?.value || "";
       const lkrRate = parseFloat(lkrRateSetting?.value || "0") || 0;
@@ -7410,7 +7412,7 @@ const setupBotHandlers = (targetBot: TelegramBot) => {
         }
       } else if (normalizedText === supportBtnText || normalizedText?.includes(supportBtnText)) {
         const supportUsernameSetting = await storage.getSetting("SUPPORT_USERNAME");
-        const supportUsername = supportUsernameSetting?.value || "@rochana_imesh";
+        const supportUsername = supportUsernameSetting?.value || "@support";
         const cleanUsername = supportUsername.replace('@', '');
         targetBot.sendMessage(chatId, `<tg-emoji emoji-id="5461151367559141950">📩</tg-emoji> <b>For support, please contact us below:</b>`, {
           parse_mode: 'HTML',
@@ -7423,7 +7425,7 @@ const setupBotHandlers = (targetBot: TelegramBot) => {
       } else if (normalizedText === '❓ FAQ') {
         const userName = tgUser?.firstName || 'User';
         const supportUsernameSetting = await storage.getSetting("SUPPORT_USERNAME");
-        const supportUsername = supportUsernameSetting?.value || "@rochana_imesh";
+        const supportUsername = supportUsernameSetting?.value || "@support";
 
         const rulesMessage = `<tg-emoji emoji-id="5413554183502572090">👋</tg-emoji> <b>Welcome, ${userName}</b> <tg-emoji emoji-id="5413554183502572090">✨</tg-emoji>\n\n` +
           `<tg-emoji emoji-id="5213181173026533794">⚠️</tg-emoji> <b>STORE RULES – PLEASE READ BEFORE BUYING</b> <tg-emoji emoji-id="5213181173026533794">⚠️</tg-emoji>\n\n` +

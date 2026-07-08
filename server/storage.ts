@@ -228,7 +228,7 @@ export class DatabaseStorage implements IStorage {
     // Initialize default branding settings
     const defaultSettings = [
       { key: "STORE_NAME", value: "Shopeefy" },
-      { key: "SUPPORT_USERNAME", value: "@rochana_imesh" },
+      { key: "SUPPORT_USERNAME", value: "@support" },
       { key: "SUPPORT_BTN_TEXT", value: "Write to Support" },
       { key: "LOADING_TEXT", value: "Shopeefy..." },
       { key: "TRC20_WALLET_ADDRESS", value: "" },
@@ -237,7 +237,8 @@ export class DatabaseStorage implements IStorage {
       { key: "PAYMENT_APTOS_ENABLED", value: "false" },
       { key: "TRC20_VERIFICATION_MODE", value: "binance" },
       { key: "APTOS_VERIFICATION_MODE", value: "binance" },
-      { key: "MIN_DEPOSIT_LIMIT", value: "1.00" }
+      { key: "MIN_DEPOSIT_LIMIT", value: "1.00" },
+      { key: "DEFAULT_THEME", value: "dark" }
     ];
 
     for (const s of defaultSettings) {
