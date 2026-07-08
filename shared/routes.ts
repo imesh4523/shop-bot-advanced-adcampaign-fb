@@ -141,7 +141,7 @@ export const api = {
     update: {
       method: 'PATCH' as const,
       path: '/api/telegram-users/:id',
-      input: z.object({ balance: z.number().optional(), purchased: z.number().optional() }),
+      input: z.object({ balance: z.number().optional(), purchased: z.number().optional(), balanceLkr: z.number().optional(), balanceUsdt: z.number().optional(), balanceTrx: z.number().optional() }),
       responses: {
         200: z.custom<typeof telegramUsers.$inferSelect>(),
       },
