@@ -464,6 +464,14 @@ export default function MiniAppShop() {
   };
 
   const formatPrice = (amountInCents: number, fromCurrency: string = 'USD', toCurrency: string) => {
+    if (fromCurrency === toCurrency) {
+      const amount = amountInCents / 100;
+      if (toCurrency === 'LKR') return `Rs. ${amount.toFixed(2)}`;
+      if (toCurrency === 'USDT') return `₮ ${amount.toFixed(2)}`;
+      if (toCurrency === 'TRX') return `${amount.toFixed(2)} TRX`;
+      return `$${amount.toFixed(2)}`;
+    }
+
     const fromRate = getRate(fromCurrency);
     const amountInUsdCents = Math.round(amountInCents / fromRate);
     const toRate = getRate(toCurrency);
