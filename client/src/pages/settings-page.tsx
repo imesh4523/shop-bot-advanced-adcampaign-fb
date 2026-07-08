@@ -1609,15 +1609,16 @@ export default function SettingsPage() {
           <CardContent className="space-y-6">
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label className="text-xs font-bold text-white/70 uppercase tracking-widest">LKR Rate</Label>
+                <Label className="text-xs font-bold text-white/70 uppercase tracking-widest">LKR Rate (1 USDT = ? LKR)</Label>
                 <Input
                   type="number"
                   step="any"
-                  placeholder="300"
+                  placeholder="15000"
                   className="glass-panel border-white/10 bg-purple-950/20 text-white h-12 rounded-xl focus:border-purple-500/50 transition-all"
                   value={currencyRateLkr}
                   onChange={(e) => setCurrencyRateLkr(e.target.value)}
                 />
+                <p className="text-[10px] text-white/30">Binance P2P rate — LKR per 1 USDT</p>
               </div>
               <div className="space-y-2">
                 <Label className="text-xs font-bold text-white/70 uppercase tracking-widest">INR Rate</Label>

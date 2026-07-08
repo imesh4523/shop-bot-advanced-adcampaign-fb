@@ -745,6 +745,31 @@ export default function MiniAppShop() {
     }
   };
 
+  // Bank Transfer top-up: auto-request human agent + send topup message + open live chat
+  const handleBankTransferTopup = async () => {
+    setIsDepositModalOpen(false);
+    setIsChatOpen(true);
+    try {
+      // 1. Request human agent (switches to live mode)
+      await miniApiRequest("POST", "/api/mini/support/request");
+      setChatMode("human");
+      // 2. Auto-send a topup request message
+      const autoMsg = `🏦 I want to top up my LKR balance via Bank Transfer. Please guide me on how to proceed.`;
+      const res = await miniApiRequest("POST", "/api/mini/support/send", { message: autoMsg });
+      const data = await res.json();
+      setLiveMessages(prev => {
+        if (prev.some((m: any) => m.id === data.message.id)) return prev;
+        return [...prev, data.message];
+      });
+      await fetchLiveMessages();
+    } catch (err: any) {
+      toast({
+        title: "Connecting to Agent",
+        description: "Opening live support for bank transfer instructions.",
+      });
+    }
+  };
+
   // Send message in human live chat mode
   const handleSendLiveMessage = async () => {
     if ((!chatMessage.trim() && !uploadedAttachment) || isSendingChat || !user?.telegramId) return;
@@ -2600,6 +2625,15 @@ export default function MiniAppShop() {
                               <path d="M16.624 13.9202l2.7175 2.7154-7.353 7.353-7.353-7.352 2.7175-2.7164 4.6355 4.6595 4.6356-4.6595zm4.6366-4.6366L24 12l-2.7154 2.7164L18.5682 12l2.6924-2.7164zm-9.272.001l2.7163 2.6914-2.7164 2.7174v-.001L9.2721 12l2.7164-2.7154zm-9.2722-.001L5.4088 12l-2.6914 2.6924L0 12l2.7164-2.7164zM11.9885.0115l7.353 7.329-2.7174 2.7154-4.6356-4.6356-4.6355 4.6595-2.7174-2.7154 7.353-7.353z"/>
                             </svg>
                           )
+                        },
+                        {
+                          id: 'bank_transfer',
+                          name: 'Bank Transfer',
+                          icon: (
+                            <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current text-emerald-500" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M2 10h20v2H2zm0 4h20v2H2zM12 2L2 7h20L12 2zm0 18l10-5H2l10 5z"/>
+                            </svg>
+                          )
                         }
                       ] : []),
                       ...(selectedDepositCurrency === 'USDT' ? [
@@ -2641,7 +2675,10 @@ export default function MiniAppShop() {
                         key={m.id}
                         type="button"
                         onClick={() => {
-                          console.log("Selected payment method:", m.id);
+                          if (m.id === 'bank_transfer') {
+                            handleBankTransferTopup();
+                            return;
+                          }
                           setDepositMethod(m.id as any);
                         }}
                         className={`flex items-center gap-3 p-4 rounded-2xl border text-xs font-black uppercase tracking-wider transition-all ${
@@ -2699,8 +2736,36 @@ export default function MiniAppShop() {
                 <div className="bg-purple-50/50 dark:bg-white/5 p-5 rounded-3xl border border-purple-100 dark:border-white/10 space-y-3">
                   <div className="flex justify-between items-center text-xs">
                     <span className="font-bold text-neutral-400 uppercase tracking-widest">Send Exactly:</span>
-                    <span className="font-black text-neutral-900 dark:text-white">${activeDeposit.amount.toFixed(2)} USDT</span>
+                    <span className="font-black text-neutral-900 dark:text-white">
+                      {(() => {
+                        const rateLkr = rateLkrSetting?.value ? parseFloat(rateLkrSetting.value) : 15000;
+                        if (activeDeposit.method === 'binance' && selectedDepositCurrency === 'LKR') {
+                          // Convert LKR → USDT at Binance P2P rate (rateLkr = LKR per 1 USDT)
+                          const usdt = activeDeposit.amount / rateLkr;
+                          return <>
+                            <span className="text-neutral-400 text-[10px] mr-2">Rs. {activeDeposit.amount.toFixed(2)} LKR →</span>
+                            <span className="text-teal-400">{usdt.toFixed(4)} USDT</span>
+                          </>;
+                        }
+                        if (selectedDepositCurrency === 'LKR') {
+                          return `Rs. ${activeDeposit.amount.toFixed(2)} LKR`;
+                        }
+                        if (selectedDepositCurrency === 'USDT') {
+                          return `${activeDeposit.amount.toFixed(2)} USDT`;
+                        }
+                        if (selectedDepositCurrency === 'TRX') {
+                          return `${activeDeposit.amount.toFixed(4)} TRX`;
+                        }
+                        return `$${activeDeposit.amount.toFixed(2)} USD`;
+                      })()}
+                    </span>
                   </div>
+                  {activeDeposit.method === 'binance' && selectedDepositCurrency === 'LKR' && (
+                    <div className="flex justify-between items-center text-[10px] text-neutral-400">
+                      <span className="uppercase tracking-widest font-bold">Rate:</span>
+                      <span>1 USDT ≈ Rs. {rateLkrSetting?.value || '15000'} LKR</span>
+                    </div>
+                  )}
                   <div className="flex flex-col gap-1.5 pt-2 border-t border-purple-100/50 dark:border-white/5">
                     <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
                       {activeDeposit.method === 'binance' ? "To Binance Pay ID:" : "To Wallet Address:"}
