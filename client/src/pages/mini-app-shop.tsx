@@ -52,14 +52,40 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
+// Safe LocalStorage wrapper for restricted WebViews
+const safeLocalStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.warn("localStorage is not available:", e);
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn("localStorage is not available:", e);
+    }
+  },
+  removeItem: (key: string): void => {
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {
+      console.warn("localStorage is not available:", e);
+    }
+  }
+};
+
 // Helper for MiniApp API requests
 const miniApiRequest = async (method: string, path: string, body?: any) => {
   const initData = getTelegramInitData();
   
-  let webUserId = localStorage.getItem("web_user_id") || "";
+  let webUserId = safeLocalStorage.getItem("web_user_id") || "";
   if (!webUserId) {
     webUserId = "web_guest_" + Math.random().toString(36).substring(2, 15);
-    localStorage.setItem("web_user_id", webUserId);
+    safeLocalStorage.setItem("web_user_id", webUserId);
   }
 
   const res = await fetch(path, {
@@ -714,7 +740,7 @@ export default function MiniAppShop() {
   const [isLiveLoading, setIsLiveLoading] = useState(false);
   const [isRequestingHuman, setIsRequestingHuman] = useState(false);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
-  const [uploadedAttachment, setUploadedAttachment] = useState<{ url: string; type: 'image' | 'pdf'; name: string } | null>(null);
+  const [uploadedAttachment, setUploadedAttachment] = useState<{ url: string; type: 'image' | 'pdf' | 'document'; name: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -741,10 +767,10 @@ export default function MiniAppShop() {
     try {
       const initData = getTelegramInitData();
       // Always ensure a web_user_id exists (same logic as miniApiRequest)
-      let webUserId = localStorage.getItem("web_user_id") || "";
+      let webUserId = safeLocalStorage.getItem("web_user_id") || "";
       if (!webUserId) {
         webUserId = "web_guest_" + Math.random().toString(36).substring(2, 15);
-        localStorage.setItem("web_user_id", webUserId);
+        safeLocalStorage.setItem("web_user_id", webUserId);
       }
 
       const res = await fetch("/api/support/upload", {
@@ -980,7 +1006,7 @@ export default function MiniAppShop() {
 
     const webUserIdParam = params.get("web_user_id");
     if (webUserIdParam) {
-      localStorage.setItem("web_user_id", webUserIdParam);
+      safeLocalStorage.setItem("web_user_id", webUserIdParam);
       toast({ title: "Login Successful", description: "Successfully signed in with Google!" });
       queryClient.invalidateQueries({ queryKey: ["/api/mini/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/mini/orders"] });
@@ -994,7 +1020,7 @@ export default function MiniAppShop() {
         headers: {
           "Content-Type": "application/json",
           "x-telegram-init-data": getTelegramInitData(),
-          "x-web-user-id": localStorage.getItem("web_user_id") || ""
+          "x-web-user-id": safeLocalStorage.getItem("web_user_id") || ""
         },
         body: JSON.stringify({ sessionId })
       }).then(res => res.json()).then(data => {
