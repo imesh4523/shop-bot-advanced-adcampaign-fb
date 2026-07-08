@@ -97291,9 +97291,20 @@ ${extraInstructions}
         if (availableItems.length < quantity) {
           throw new Error(`Insufficient stock. Only ${availableItems.length} items available.`);
         }
-        const [updatedUser] = await tx.update(telegramUsers).set({
-          balance: sql`${telegramUsers.balance} - ${totalPriceInUsdCents}`
-        }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, totalPriceInUsdCents))).returning();
+        let updatedUser;
+        const currency = product.currency || "USD";
+        if (currency === "LKR") {
+          const totalPriceInLkrCents = Math.round(product.price * quantity);
+          [updatedUser] = await tx.update(telegramUsers).set({ balanceLkr: sql`${telegramUsers.balanceLkr} - ${totalPriceInLkrCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceLkr, totalPriceInLkrCents))).returning();
+        } else if (currency === "USDT") {
+          const totalPriceInUsdtCents = Math.round(product.price * quantity);
+          [updatedUser] = await tx.update(telegramUsers).set({ balanceUsdt: sql`${telegramUsers.balanceUsdt} - ${totalPriceInUsdtCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceUsdt, totalPriceInUsdtCents))).returning();
+        } else if (currency === "TRX") {
+          const totalPriceInTrxCents = Math.round(product.price * quantity);
+          [updatedUser] = await tx.update(telegramUsers).set({ balanceTrx: sql`${telegramUsers.balanceTrx} - ${totalPriceInTrxCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceTrx, totalPriceInTrxCents))).returning();
+        } else {
+          [updatedUser] = await tx.update(telegramUsers).set({ balance: sql`${telegramUsers.balance} - ${totalPriceInUsdCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, totalPriceInUsdCents))).returning();
+        }
         if (!updatedUser) {
           throw new Error("Insufficient balance");
         }
@@ -97405,7 +97416,20 @@ Thank you for shopping with us! <tg-emoji emoji-id="5456343263340405032">\u{1F6C
         });
         const rate = currencySetting ? parseFloat(currencySetting.value) : 1;
         const priceInUsdCents = Math.round(offer.price / rate);
-        const [updatedUser] = await tx.update(telegramUsers).set({ balance: sql`${telegramUsers.balance} - ${priceInUsdCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, priceInUsdCents))).returning();
+        let updatedUser;
+        const currency = offer.product?.currency || "USD";
+        if (currency === "LKR") {
+          const priceInLkrCents = offer.price;
+          [updatedUser] = await tx.update(telegramUsers).set({ balanceLkr: sql`${telegramUsers.balanceLkr} - ${priceInLkrCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceLkr, priceInLkrCents))).returning();
+        } else if (currency === "USDT") {
+          const priceInUsdtCents = offer.price;
+          [updatedUser] = await tx.update(telegramUsers).set({ balanceUsdt: sql`${telegramUsers.balanceUsdt} - ${priceInUsdtCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceUsdt, priceInUsdtCents))).returning();
+        } else if (currency === "TRX") {
+          const priceInTrxCents = offer.price;
+          [updatedUser] = await tx.update(telegramUsers).set({ balanceTrx: sql`${telegramUsers.balanceTrx} - ${priceInTrxCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceTrx, priceInTrxCents))).returning();
+        } else {
+          [updatedUser] = await tx.update(telegramUsers).set({ balance: sql`${telegramUsers.balance} - ${priceInUsdCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, priceInUsdCents))).returning();
+        }
         if (!updatedUser) throw new Error("Insufficient balance");
         const availableItems = await tx.select().from(credentials).where(and(eq(credentials.productId, offer.productId), eq(credentials.status, "available"))).limit(offer.bundleQuantity).for("update", { skipLocked: true });
         if (availableItems.length < offer.bundleQuantity) {
