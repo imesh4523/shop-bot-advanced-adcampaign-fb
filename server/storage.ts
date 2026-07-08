@@ -249,6 +249,17 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
+    // Migrate existing SUPPORT_USERNAME if it's set to @rochana_imesh
+    try {
+      const existingSupport = await db.select().from(settings).where(eq(settings.key, "SUPPORT_USERNAME"));
+      if (existingSupport.length > 0 && existingSupport[0].value === "@rochana_imesh") {
+        await db.update(settings).set({ value: "@support" }).where(eq(settings.key, "SUPPORT_USERNAME"));
+        console.log('[DB] Migrated SUPPORT_USERNAME from @rochana_imesh to @support');
+      }
+    } catch (err) {
+      console.error('[DB] Failed to migrate SUPPORT_USERNAME:', err);
+    }
+
     const email = process.env.ADMIN_EMAIL;
     const password = process.env.ADMIN_PASSWORD;
     if (email && password) {

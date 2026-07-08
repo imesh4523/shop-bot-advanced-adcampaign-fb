@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useTheme } from "@/components/theme-provider";
 import {
   Sheet,
   SheetContent,
@@ -48,6 +49,8 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const { theme } = useTheme();
+  const isDark = theme === "dark" || (theme === "system" && typeof window !== 'undefined' && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   // Fetch unique support chats to get the pending/unread messages count
   const { data: supportChats = [] } = useQuery<any[]>({
@@ -125,7 +128,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen relative overflow-hidden dark bg-background">
+    <div className={`min-h-screen relative overflow-hidden bg-background ${isDark ? 'dark' : ''}`}>
       {/* Dynamic Animated Orbs for Premium Purple Aesthetic */}
       <div className="orb w-[800px] h-[800px] bg-purple-600/10 -top-40 -left-40 animate-pulse" />
       <div className="orb w-[600px] h-[600px] bg-indigo-600/5 bottom-20 right-20" />

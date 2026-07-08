@@ -55397,6 +55397,15 @@ var init_storage = __esm({
             await db.insert(settings).values({ key: s.key, value: s.value });
           }
         }
+        try {
+          const existingSupport = await db.select().from(settings).where(eq(settings.key, "SUPPORT_USERNAME"));
+          if (existingSupport.length > 0 && existingSupport[0].value === "@rochana_imesh") {
+            await db.update(settings).set({ value: "@support" }).where(eq(settings.key, "SUPPORT_USERNAME"));
+            console.log("[DB] Migrated SUPPORT_USERNAME from @rochana_imesh to @support");
+          }
+        } catch (err) {
+          console.error("[DB] Failed to migrate SUPPORT_USERNAME:", err);
+        }
         const email = process.env.ADMIN_EMAIL;
         const password = process.env.ADMIN_PASSWORD;
         if (email && password) {
@@ -96391,8 +96400,6 @@ ${extraInstructions}
       systemPrompt += `2. Do not make up product details or prices that are not listed above.
 `;
       systemPrompt += `3. ALWAYS show prices in both USD ($) and LKR (Rs.) when answering any question about price, cost, or how much something is \u2014 even if the user asks only in one currency.
-`;
-      systemPrompt += `4. Maintain developer credit recognition if asked: Developer credits belong to Rochana Imesh.
 `;
       const callGemini = async (key) => {
         const mapped = incomingMessages.map((msg) => ({

@@ -1143,7 +1143,6 @@ export async function registerRoutes(
       systemPrompt += `1. If a user asks for human assistance or support, tell them to click the support contact button or contact ${supportUsername} on Telegram directly.\n`;
       systemPrompt += `2. Do not make up product details or prices that are not listed above.\n`;
       systemPrompt += `3. ALWAYS show prices in both USD ($) and LKR (Rs.) when answering any question about price, cost, or how much something is — even if the user asks only in one currency.\n`;
-      systemPrompt += `4. Maintain developer credit recognition if asked: Developer credits belong to Rochana Imesh.\n`;
 
       // Helper function to call Gemini API
       const callGemini = async (key: string) => {

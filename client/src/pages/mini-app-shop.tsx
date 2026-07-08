@@ -1209,7 +1209,7 @@ export default function MiniAppShop() {
   });
 
   useEffect(() => {
-    if (!localStorage.getItem("vite-ui-theme") && defaultThemeSetting?.value) {
+    if (!localStorage.getItem("shopeefy-theme") && defaultThemeSetting?.value) {
       setTheme(defaultThemeSetting.value as any);
     }
   }, [defaultThemeSetting, setTheme]);
