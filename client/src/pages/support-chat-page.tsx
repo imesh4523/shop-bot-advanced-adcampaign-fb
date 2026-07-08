@@ -51,6 +51,8 @@ interface SupportMessage {
   lastName: string | null;
   message: string;
   sender: "user" | "admin";
+  attachmentUrl?: string | null;
+  attachmentType?: string | null;
   createdAt: string;
 }
 
@@ -533,7 +535,7 @@ export default function SupportChatPage() {
                                       src={msg.attachmentUrl} 
                                       alt="attachment" 
                                       className="max-w-[280px] h-auto rounded-xl hover:opacity-90 transition-opacity cursor-pointer border border-white/10"
-                                      onClick={() => setLightboxUrl(msg.attachmentUrl)}
+                                      onClick={() => setLightboxUrl(msg.attachmentUrl || null)}
                                     />
                                   </div>
                                 )}

@@ -312,6 +312,25 @@ export default function SettingsPage() {
     queryKey: ["/api/settings/DIGITALOCEAN_API_KEY"],
   });
 
+  const [googleClientId, setGoogleClientId] = useState("");
+  const [googleLoginEnabled, setGoogleLoginEnabled] = useState(false);
+
+  const { data: googleClientIdSetting, isLoading: isGoogleClientIdLoading } = useQuery<{ key: string, value: string }>({
+    queryKey: ["/api/settings/GOOGLE_CLIENT_ID"],
+  });
+
+  const { data: googleLoginEnabledSetting, isLoading: isGoogleLoginEnabledLoading } = useQuery<{ key: string, value: string }>({
+    queryKey: ["/api/settings/GOOGLE_LOGIN_ENABLED"],
+  });
+
+  useEffect(() => {
+    if (googleClientIdSetting?.value !== undefined) setGoogleClientId(googleClientIdSetting.value);
+  }, [googleClientIdSetting]);
+
+  useEffect(() => {
+    if (googleLoginEnabledSetting?.value !== undefined) setGoogleLoginEnabled(googleLoginEnabledSetting.value === "true");
+  }, [googleLoginEnabledSetting]);
+
   const isLoading = isTokenLoading || isBroadcastLoading || isSupportLoading || isCryptomusLoading ||
     isMerchantLoading || isBinanceLoading || isBinanceApiLoading || isBinanceSecretLoading ||
     isFaqLoading || isHowToBuyLoading || isHowToDepositLoading || isBinanceEnabledLoading ||
@@ -324,7 +343,7 @@ export default function SettingsPage() {
     isEmailServiceLoading || isEmailSenderLoading || isResendApiKeyLoading || isSendgridApiKeyLoading ||
     isBrevoApiKeyLoading || isSesHostLoading || isSesPortLoading || isSesUserLoading || isSesPassLoading ||
     isSmtpHostLoading || isSmtpPortLoading || isSmtpUserLoading || isSmtpPassLoading ||
-    isEmailLoginOnlyLoading || isStripeSecretLoading || isStripeWebhookLoading || isMinDepositLoading || isDigitalOceanLoading;
+    isEmailLoginOnlyLoading || isStripeSecretLoading || isStripeWebhookLoading || isMinDepositLoading || isDigitalOceanLoading || isGoogleClientIdLoading || isGoogleLoginEnabledLoading;
 
   const [binanceEnabled, setBinanceEnabled] = useState(true);
   const [cryptomusEnabled, setCryptomusEnabled] = useState(true);
@@ -535,6 +554,25 @@ export default function SettingsPage() {
       console.error("Theme color dynamic styling in settings page failed:", err);
     }
   }, [themeColor]);
+
+  const googleConfigMutation = useMutation({
+    mutationFn: async ({ key, value }: { key: string; value: string }) => {
+      const res = await apiRequest("POST", "/api/settings", { key, value });
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/settings/${variables.key}`] });
+      toast({
+        title: "Google Login Settings Saved",
+        description: `${variables.key.replace("_", " ").toLowerCase()} updated successfully.`,
+      });
+    }
+  });
+
+  const handleSaveGoogleSettings = () => {
+    googleConfigMutation.mutate({ key: "GOOGLE_CLIENT_ID", value: googleClientId });
+    googleConfigMutation.mutate({ key: "GOOGLE_LOGIN_ENABLED", value: googleLoginEnabled ? "true" : "false" });
+  };
 
   const emailServiceMutation = useMutation({
     mutationFn: async ({ key, value }: { key: string, value: string }) => {
@@ -2690,6 +2728,55 @@ export default function SettingsPage() {
                   <p className="text-[10px] text-white/40">Select the service to use for payment verification.</p>
                 </div>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="max-w-2xl">
+        <Card className="glass-card border-0 overflow-hidden">
+          <div className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 p-6 border-b border-white/10">
+            <CardTitle className="text-2xl font-black tracking-tighter flex items-center gap-3">
+              🔑 Google Login Configuration
+            </CardTitle>
+            <CardDescription className="text-white/40">
+              Configure Google OAuth 2.0 Client credentials to enable Google Sign-In for administrators.
+            </CardDescription>
+          </div>
+          <CardContent className="space-y-6 pt-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-bold text-white/70">Enable Google Login</Label>
+                <p className="text-[10px] text-white/40">Allow administrators to log in using Google Single Sign-On.</p>
+              </div>
+              <Button
+                variant={googleLoginEnabled ? "default" : "outline"}
+                size="sm"
+                onClick={() => setGoogleLoginEnabled(!googleLoginEnabled)}
+                className={googleLoginEnabled ? "bg-green-500 hover:bg-green-600 font-bold" : "border-white/20 font-bold"}
+              >
+                {googleLoginEnabled ? "Enabled" : "Disabled"}
+              </Button>
+            </div>
+
+            <div className="space-y-4 pt-6 border-t border-white/5">
+              <Label className="text-sm font-bold text-white/70">Google Client ID</Label>
+              <div className="flex gap-3">
+                <Input
+                  placeholder="Enter Google OAuth Client ID..."
+                  className="glass-panel border-white/10 bg-white/5 text-white h-12"
+                  value={googleClientId}
+                  onChange={(e) => setGoogleClientId(e.target.value)}
+                />
+                <Button
+                  onClick={handleSaveGoogleSettings}
+                  disabled={googleConfigMutation.isPending}
+                  className="h-12 px-6 rounded-xl bg-gradient-to-r from-purple-500 to-blue-600 font-bold"
+                >
+                  {googleConfigMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                </Button>
+              </div>
+              <p className="text-[10px] text-white/40">Provide the client ID registered in Google Cloud Console OAuth configuration.</p>
             </div>
           </CardContent>
         </Card>

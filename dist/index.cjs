@@ -46361,7 +46361,7 @@ __export(schema_exports, {
   settings: () => settings,
   specialOffers: () => specialOffers2,
   specialOffersRelations: () => specialOffersRelations,
-  supportMessages: () => supportMessages2,
+  supportMessages: () => supportMessages,
   telegramUsers: () => telegramUsers,
   telegramUsersRelations: () => telegramUsersRelations,
   trafficLogs: () => trafficLogs,
@@ -46369,7 +46369,7 @@ __export(schema_exports, {
   users: () => users2,
   vpnServers: () => vpnServers
 });
-var users2, insertUserSchema, products, credentials, telegramUsers, settings, payments, productsRelations, credentialsRelations, telegramUsersRelations, orders, ordersRelations, paymentsRelations, insertProductSchema, insertCredentialSchema, insertOrderSchema, insertTelegramUserSchema, insertPaymentSchema, broadcastChannels, broadcastMessages, insertBroadcastChannelSchema, insertBroadcastMessageSchema, pushSubscriptions, pushSubscriptionsRelations, insertPushSubscriptionSchema, awsAccounts, awsActivities, awsAccountsRelations, awsActivitiesRelations, insertAwsAccountSchema, insertAwsActivitySchema, specialOffers2, specialOffersRelations, insertSpecialOfferSchema, backupConfigs, backupLogs, insertBackupConfigSchema, insertBackupLogSchema, trafficLogs, insertTrafficLogSchema, supportMessages2, insertSupportMessageSchema, checkedIps, insertCheckedIpSchema, vpnServers, insertVpnServerSchema, uploadedFiles, insertUploadedFileSchema;
+var users2, insertUserSchema, products, credentials, telegramUsers, settings, payments, productsRelations, credentialsRelations, telegramUsersRelations, orders, ordersRelations, paymentsRelations, insertProductSchema, insertCredentialSchema, insertOrderSchema, insertTelegramUserSchema, insertPaymentSchema, broadcastChannels, broadcastMessages, insertBroadcastChannelSchema, insertBroadcastMessageSchema, pushSubscriptions, pushSubscriptionsRelations, insertPushSubscriptionSchema, awsAccounts, awsActivities, awsAccountsRelations, awsActivitiesRelations, insertAwsAccountSchema, insertAwsActivitySchema, specialOffers2, specialOffersRelations, insertSpecialOfferSchema, backupConfigs, backupLogs, insertBackupConfigSchema, insertBackupLogSchema, trafficLogs, insertTrafficLogSchema, supportMessages, insertSupportMessageSchema, checkedIps, insertCheckedIpSchema, vpnServers, insertVpnServerSchema, uploadedFiles, insertUploadedFileSchema;
 var init_schema2 = __esm({
   "shared/schema.ts"() {
     "use strict";
@@ -46614,7 +46614,7 @@ var init_schema2 = __esm({
       createdAt: timestamp("created_at").defaultNow()
     });
     insertTrafficLogSchema = createInsertSchema(trafficLogs).omit({ id: true, createdAt: true });
-    supportMessages2 = pgTable("support_messages", {
+    supportMessages = pgTable("support_messages", {
       id: serial("id").primaryKey(),
       telegramId: text("telegram_id").notNull(),
       username: text("username"),
@@ -46627,7 +46627,7 @@ var init_schema2 = __esm({
       attachmentType: text("attachment_type"),
       createdAt: timestamp("created_at").defaultNow()
     });
-    insertSupportMessageSchema = createInsertSchema(supportMessages2).omit({ id: true, createdAt: true });
+    insertSupportMessageSchema = createInsertSchema(supportMessages).omit({ id: true, createdAt: true });
     checkedIps = pgTable("checked_ips", {
       id: serial("id").primaryKey(),
       ip: text("ip").notNull().unique(),
@@ -55808,18 +55808,18 @@ var init_storage = __esm({
       }
       // Support Messages Implementation
       async saveSupportMessage(msg) {
-        const [newMessage] = await db.insert(supportMessages2).values(msg).returning();
+        const [newMessage] = await db.insert(supportMessages).values(msg).returning();
         return newMessage;
       }
       async getSupportMessages(telegramId) {
-        const query = db.select().from(supportMessages2);
+        const query = db.select().from(supportMessages);
         if (telegramId) {
-          query.where(eq(supportMessages2.telegramId, telegramId));
+          query.where(eq(supportMessages.telegramId, telegramId));
         }
-        return await query.orderBy(supportMessages2.createdAt);
+        return await query.orderBy(supportMessages.createdAt);
       }
       async getSupportChats() {
-        const messages = await db.select().from(supportMessages2).orderBy(desc(supportMessages2.createdAt));
+        const messages = await db.select().from(supportMessages).orderBy(desc(supportMessages.createdAt));
         const chatsMap = /* @__PURE__ */ new Map();
         for (const m of messages) {
           if (!chatsMap.has(m.telegramId)) {
@@ -98804,6 +98804,7 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
           }
         });
         supportBot.on("message", async (msg) => {
+          if (!supportBot) return;
           if (!msg.chat || !msg.chat.id) return;
           const telegramId = msg.chat.id.toString();
           const username = msg.chat.username || null;

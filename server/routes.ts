@@ -8,7 +8,7 @@ import { Server as SocketServer } from "socket.io";
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
-import { credentials, settings, payments, insertCredentialSchema, telegramUsers, users, insertAwsAccountSchema, insertSpecialOfferSchema, orders, products } from "@shared/schema";
+import { credentials, settings, payments, insertCredentialSchema, telegramUsers, users, insertAwsAccountSchema, insertSpecialOfferSchema, orders, products, supportMessages } from "@shared/schema";
 import { eq, desc, and, sql, gte, inArray } from "drizzle-orm";
 import { db, pool } from "./db";
 import { storage } from "./storage";
@@ -4071,6 +4071,7 @@ const initSupportBot = async () => {
       });
 
       supportBot.on("message", async (msg) => {
+        if (!supportBot) return;
         if (!msg.chat || !msg.chat.id) return;
         const telegramId = msg.chat.id.toString();
         const username = msg.chat.username || null;
