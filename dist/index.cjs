@@ -98299,12 +98299,13 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
       }
       const updated = await storage.updateSetting(key, value);
       if (key === "TELEGRAM_BOT_TOKEN" || key === "BROADCAST_BOT_TOKEN") {
-        await initBot();
+        initBot().catch((e) => console.error("initBot error:", e));
       } else if (key === "TELEGRAM_SUPPORT_BOT_TOKEN") {
-        await initSupportBot();
+        initSupportBot().catch((e) => console.error("initSupportBot error:", e));
       } else if (key === "VAPID_PUBLIC_KEY" || key === "VAPID_PRIVATE_KEY" || key === "VAPID_SUBJECT") {
-        const { initPushNotifications: initPushNotifications2 } = await Promise.resolve().then(() => (init_push_notifications(), push_notifications_exports));
-        await initPushNotifications2();
+        Promise.resolve().then(() => (init_push_notifications(), push_notifications_exports)).then(({ initPushNotifications: initPushNotifications2 }) => {
+          initPushNotifications2().catch((e) => console.error("initPushNotifications error:", e));
+        });
       }
       res.json(updated);
     } catch (err) {

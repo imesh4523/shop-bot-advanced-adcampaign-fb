@@ -3508,14 +3508,15 @@ app.post("/api/settings", isAuth, async (req, res) => {
 
     const updated = await storage.updateSetting(key, value);
 
-    // Re-initialize bot if token changed
+    // Re-initialize bot if token changed — fire and forget to avoid timeout
     if (key === "TELEGRAM_BOT_TOKEN" || key === "BROADCAST_BOT_TOKEN") {
-      await initBot();
+      initBot().catch((e: any) => console.error("initBot error:", e));
     } else if (key === "TELEGRAM_SUPPORT_BOT_TOKEN") {
-      await initSupportBot();
+      initSupportBot().catch((e: any) => console.error("initSupportBot error:", e));
     } else if (key === "VAPID_PUBLIC_KEY" || key === "VAPID_PRIVATE_KEY" || key === "VAPID_SUBJECT") {
-      const { initPushNotifications } = await import("./push-notifications");
-      await initPushNotifications();
+      import("./push-notifications").then(({ initPushNotifications }) => {
+        initPushNotifications().catch((e: any) => console.error("initPushNotifications error:", e));
+      });
     }
 
     res.json(updated);
