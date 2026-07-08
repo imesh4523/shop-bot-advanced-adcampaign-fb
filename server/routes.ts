@@ -2688,6 +2688,93 @@ app.post("/api/login", loginLimiter, async (req, res) => {
   res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName });
 });
 
+app.post("/api/auth/passkey-register", isAuth, async (req, res) => {
+  try {
+    const { publicKeyJwk } = req.body;
+    if (!publicKeyJwk || typeof publicKeyJwk !== 'object') {
+      return res.status(400).json({ message: "Invalid public key" });
+    }
+
+    if (!req.session.userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const userId = req.session.userId;
+    await db.update(users)
+      .set({ passkeyCredential: JSON.stringify(publicKeyJwk) })
+      .where(eq(users.id, userId));
+
+    res.json({ success: true, message: "Passkey registered successfully!" });
+  } catch (err: any) {
+    console.error("Passkey registration failed:", err);
+    res.status(500).json({ message: err.message || "Failed to register passkey" });
+  }
+});
+
+app.get("/api/auth/passkey-challenge", async (req, res) => {
+  try {
+    const challenge = crypto.randomBytes(32).toString('hex');
+    (req.session as any).loginChallenge = challenge;
+    res.json({ challenge });
+  } catch (err: any) {
+    res.status(500).json({ message: "Failed to generate challenge" });
+  }
+});
+
+app.post("/api/auth/passkey-verify", loginLimiter, async (req, res) => {
+  const { email, signatureHex } = req.body;
+
+  if (!email || !signatureHex) {
+    return res.status(400).json({ message: "Email and signature are required" });
+  }
+
+  try {
+    const user = await storage.getUserByEmail(email);
+    if (!user || !user.passkeyCredential) {
+      return res.status(401).json({ message: "Passkey is not configured for this user" });
+    }
+
+    const challenge = (req.session as any).loginChallenge;
+    if (!challenge) {
+      return res.status(400).json({ message: "Challenge expired or invalid. Please try again." });
+    }
+
+    const publicKeyJwk = JSON.parse(user.passkeyCredential);
+
+    // Import JWK key using crypto
+    const pubKey = crypto.createPublicKey({
+      key: publicKeyJwk,
+      format: 'jwk'
+    });
+
+    const isVerified = crypto.verify(
+      "sha256",
+      Buffer.from(challenge),
+      pubKey,
+      Buffer.from(signatureHex, "hex")
+    );
+
+    if (!isVerified) {
+      return res.status(401).json({ message: "Invalid passkey signature" });
+    }
+
+    // Passkey verification succeeded! Clear the challenge
+    delete (req.session as any).loginChallenge;
+
+    // Check if 2FA is enabled for this admin user
+    if (user.twoFactorEnabled && user.twoFactorSecret) {
+      req.session.tempUserId = user.id;
+      return res.json({ twoFactorRequired: true });
+    }
+
+    req.session.userId = user.id;
+    res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName });
+  } catch (err: any) {
+    console.error("Passkey verification error:", err);
+    res.status(500).json({ message: err.message || "Passkey login failed" });
+  }
+});
+
 app.get("/api/auth/google/callback", async (req, res) => {
     const { code, state } = req.query;
     if (!code) {
@@ -4018,6 +4105,7 @@ app.post("/api/settings", isAuth, async (req, res) => {
       "OPENAI_MODEL",
       "AI_PROVIDER_PRIORITY",
       "THEME_COLOR",
+      "PWA_ADMIN_PASSKEY_ONLY",
       "DIGITALOCEAN_API_KEY",
       "OPENVPN_DEFAULT_REGION",
       "OPENVPN_DEFAULT_SIZE",

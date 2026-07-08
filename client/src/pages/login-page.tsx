@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +26,92 @@ export default function LoginPage() {
   const { toast } = useToast();
   const [show2FA, setShow2FA] = useState(false);
   const [otpCode, setOtpCode] = useState("");
+  
+  // Passkey Login State & Logic
+  const { data: pwaPasskeyOnlySetting } = useQuery<{ value: string }>({
+    queryKey: ["/api/settings/PWA_ADMIN_PASSKEY_ONLY"]
+  });
+  const forcePasskeyOnly = pwaPasskeyOnlySetting?.value === "true";
+  
+  const [isPasskeyAuthenticating, setIsPasskeyAuthenticating] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+
+  const handlePasskeyLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailInput) {
+      toast({ title: "Email Required", description: "Please enter your administrator email first.", variant: "destructive" });
+      return;
+    }
+
+    setIsPasskeyAuthenticating(true);
+    try {
+      const challengeRes = await apiRequest("GET", "/api/auth/passkey-challenge");
+      const { challenge } = await challengeRes.json();
+
+      const privateKey = await new Promise<any>((resolve, reject) => {
+        const req = indexedDB.open("PasskeysDB", 1);
+        req.onupgradeneeded = () => {
+          req.result.createObjectStore("keys");
+        };
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction("keys", "readonly");
+          const getReq = tx.objectStore("keys").get(emailInput);
+          getReq.onsuccess = () => resolve(getReq.result);
+          getReq.onerror = () => reject(getReq.error);
+        };
+        req.onerror = () => reject(req.error);
+      });
+
+      if (!privateKey) {
+        throw new Error("No Passkey registered for this email on this device.");
+      }
+
+      const encoder = new TextEncoder();
+      const challengeData = encoder.encode(challenge);
+      const signatureBuffer = await window.crypto.subtle.sign(
+        {
+          name: "RSASSA-PKCS1-v1_5",
+        },
+        privateKey,
+        challengeData
+      );
+
+      const signatureHex = Array.from(new Uint8Array(signatureBuffer))
+        .map(b => b.toString(16).padStart(2, "0"))
+        .join("");
+
+      const verifyRes = await apiRequest("POST", "/api/auth/passkey-verify", {
+        email: emailInput,
+        signatureHex
+      });
+
+      if (!verifyRes.ok) {
+        const errData = await verifyRes.json();
+        throw new Error(errData.message || "Passkey authentication failed");
+      }
+
+      const verifyData = await verifyRes.json();
+      if (verifyData.twoFactorRequired) {
+        setShow2FA(true);
+        toast({
+          title: "Verification Required",
+          description: "Please enter the 6-digit code from your authenticator app.",
+        });
+      } else {
+        window.location.reload();
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: "Passkey Verification Failed",
+        description: err.message || "Passkey login failed.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsPasskeyAuthenticating(false);
+    }
+  };
 
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -135,68 +223,139 @@ export default function LoginPage() {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 20 }}
                     transition={{ duration: 0.3 }}
-                    className="w-full"
+                    className="w-full space-y-6"
                   >
-                    <Form {...form}>
-                      <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-6">
-                        <FormField
-                          control={form.control}
-                          name="email"
-                          render={({ field }) => (
-                            <FormItem className="space-y-2">
-                              <FormLabel className="text-xs font-bold uppercase tracking-widest text-white/50 ml-1">Identity</FormLabel>
-                              <FormControl>
-                                <div className="relative group">
-                                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 group-focus-within:text-primary transition-colors" />
-                                  <Input 
-                                    placeholder="admin@cloudshop.io" 
-                                    className="h-14 pl-12 bg-white/[0.03] border-white/10 focus:border-primary/50 focus:ring-primary/20 rounded-2xl transition-all"
-                                    {...field} 
-                                  />
-                                </div>
-                              </FormControl>
-                              <FormMessage className="text-xs" />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="password"
-                          render={({ field }) => (
-                            <FormItem className="space-y-2">
-                              <FormLabel className="text-xs font-bold uppercase tracking-widest text-white/50 ml-1">Access Key</FormLabel>
-                              <FormControl>
-                                <div className="relative group">
-                                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 group-focus-within:text-primary transition-colors" />
-                                  <Input 
-                                    type="password" 
-                                    placeholder="••••••••" 
-                                    className="h-14 pl-12 bg-white/[0.03] border-white/10 focus:border-primary/50 focus:ring-primary/20 rounded-2xl transition-all"
-                                    {...field} 
-                                  />
-                                </div>
-                              </FormControl>
-                              <FormMessage className="text-xs" />
-                            </FormItem>
-                          )}
-                        />
+                    {forcePasskeyOnly ? (
+                      <form onSubmit={handlePasskeyLogin} className="w-full space-y-6">
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold uppercase tracking-widest text-white/50 ml-1">Admin Email</Label>
+                          <div className="relative group">
+                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 group-focus-within:text-primary transition-colors" />
+                            <Input 
+                              type="email"
+                              placeholder="admin@cloudshop.io" 
+                              className="h-14 pl-12 bg-white/[0.03] border-white/10 focus:border-primary/50 focus:ring-primary/20 rounded-2xl transition-all text-white"
+                              value={emailInput}
+                              onChange={(e) => setEmailInput(e.target.value)}
+                            />
+                          </div>
+                        </div>
                         <Button 
                           type="submit"
                           size="lg" 
-                          className="w-full h-14 rounded-2xl font-bold text-lg bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-xl shadow-primary/20 transition-all active:scale-[0.98]"
-                          disabled={isLoggingIn}
+                          className="w-full h-14 rounded-2xl font-bold text-lg bg-gradient-to-r from-purple-500 to-blue-600 hover:from-purple-600 hover:to-blue-700 shadow-xl shadow-purple-500/20 transition-all active:scale-[0.98]"
+                          disabled={isPasskeyAuthenticating}
                         >
-                          {isLoggingIn ? (
+                          {isPasskeyAuthenticating ? (
                             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                           ) : (
-                            <div className="flex items-center gap-2">
-                              <span>Authorize Access</span>
-                              <ArrowRight className="w-5 h-5" />
+                            <div className="flex items-center gap-2 justify-center">
+                              <span>🔑 Sign In with Passkey</span>
                             </div>
                           )}
                         </Button>
                       </form>
-                    </Form>
+                    ) : (
+                      <>
+                        <Form {...form}>
+                          <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-6">
+                            <FormField
+                              control={form.control}
+                              name="email"
+                              render={({ field }) => (
+                                <FormItem className="space-y-2">
+                                  <FormLabel className="text-xs font-bold uppercase tracking-widest text-white/50 ml-1">Identity</FormLabel>
+                                  <FormControl>
+                                    <div className="relative group">
+                                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 group-focus-within:text-primary transition-colors" />
+                                      <Input 
+                                        placeholder="admin@cloudshop.io" 
+                                        className="h-14 pl-12 bg-white/[0.03] border-white/10 focus:border-primary/50 focus:ring-primary/20 rounded-2xl transition-all"
+                                        {...field} 
+                                      />
+                                    </div>
+                                  </FormControl>
+                                  <FormMessage className="text-xs" />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="password"
+                              render={({ field }) => (
+                                <FormItem className="space-y-2">
+                                  <FormLabel className="text-xs font-bold uppercase tracking-widest text-white/50 ml-1">Access Key</FormLabel>
+                                  <FormControl>
+                                    <div className="relative group">
+                                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 group-focus-within:text-primary transition-colors" />
+                                      <Input 
+                                        type="password" 
+                                        placeholder="••••••••" 
+                                        className="h-14 pl-12 bg-white/[0.03] border-white/10 focus:border-primary/50 focus:ring-primary/20 rounded-2xl transition-all"
+                                        {...field} 
+                                      />
+                                    </div>
+                                  </FormControl>
+                                  <FormMessage className="text-xs" />
+                                </FormItem>
+                              )}
+                            />
+                            <Button 
+                              type="submit"
+                              size="lg" 
+                              className="w-full h-14 rounded-2xl font-bold text-lg bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-xl shadow-primary/20 transition-all active:scale-[0.98]"
+                              disabled={isLoggingIn}
+                            >
+                              {isLoggingIn ? (
+                                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <span>Authorize Access</span>
+                                  <ArrowRight className="w-5 h-5" />
+                                </div>
+                              )}
+                            </Button>
+                          </form>
+                        </Form>
+
+                        <div className="relative flex py-2 items-center">
+                          <div className="flex-grow border-t border-white/5"></div>
+                          <span className="flex-shrink mx-4 text-white/20 text-xs font-bold uppercase tracking-widest">or use passkey</span>
+                          <div className="flex-grow border-t border-white/5"></div>
+                        </div>
+
+                        <form onSubmit={handlePasskeyLogin} className="w-full space-y-4">
+                          <div className="space-y-2">
+                            <Label className="text-xs font-bold uppercase tracking-widest text-white/30 ml-1">Admin Email</Label>
+                            <div className="relative group">
+                              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 group-focus-within:text-primary transition-colors" />
+                              <Input 
+                                type="email"
+                                placeholder="admin@cloudshop.io" 
+                                className="h-12 pl-12 bg-white/[0.02] border-white/5 focus:border-primary/50 focus:ring-primary/20 rounded-2xl transition-all text-white text-sm"
+                                value={emailInput}
+                                onChange={(e) => setEmailInput(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                          <Button 
+                            type="submit"
+                            variant="outline"
+                            size="lg" 
+                            className="w-full h-12 rounded-2xl font-bold border-white/10 hover:bg-white/5 transition-all text-white text-sm"
+                            disabled={isPasskeyAuthenticating}
+                          >
+                            {isPasskeyAuthenticating ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <div className="flex items-center gap-2 justify-center">
+                                <span>🔑 Authenticate via Passkey</span>
+                              </div>
+                            )}
+                          </Button>
+                        </form>
+                      </>
+                    )}
                   </motion.div>
                 ) : (
                   <motion.div

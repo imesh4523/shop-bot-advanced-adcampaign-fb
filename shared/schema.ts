@@ -14,6 +14,7 @@ export const users = pgTable("users", {
   twoFactorSecret: text("two_factor_secret"),
   twoFactorEnabled: boolean("two_factor_enabled").default(false),
   avatarUrl: text("avatar_url"),
+  passkeyCredential: text("passkey_credential"),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });

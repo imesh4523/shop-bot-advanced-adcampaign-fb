@@ -46386,7 +46386,8 @@ var init_schema2 = __esm({
       lastName: text("last_name"),
       twoFactorSecret: text("two_factor_secret"),
       twoFactorEnabled: boolean("two_factor_enabled").default(false),
-      avatarUrl: text("avatar_url")
+      avatarUrl: text("avatar_url"),
+      passkeyCredential: text("passkey_credential")
     });
     insertUserSchema = createInsertSchema(users2).omit({ id: true });
     products = pgTable("products", {
@@ -97604,6 +97605,72 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
     req.session.userId = user.id;
     res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName });
   });
+  app2.post("/api/auth/passkey-register", isAuth, async (req, res) => {
+    try {
+      const { publicKeyJwk } = req.body;
+      if (!publicKeyJwk || typeof publicKeyJwk !== "object") {
+        return res.status(400).json({ message: "Invalid public key" });
+      }
+      if (!req.session.userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const userId = req.session.userId;
+      await db.update(users2).set({ passkeyCredential: JSON.stringify(publicKeyJwk) }).where(eq(users2.id, userId));
+      res.json({ success: true, message: "Passkey registered successfully!" });
+    } catch (err) {
+      console.error("Passkey registration failed:", err);
+      res.status(500).json({ message: err.message || "Failed to register passkey" });
+    }
+  });
+  app2.get("/api/auth/passkey-challenge", async (req, res) => {
+    try {
+      const challenge = import_crypto2.default.randomBytes(32).toString("hex");
+      req.session.loginChallenge = challenge;
+      res.json({ challenge });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to generate challenge" });
+    }
+  });
+  app2.post("/api/auth/passkey-verify", loginLimiter, async (req, res) => {
+    const { email, signatureHex } = req.body;
+    if (!email || !signatureHex) {
+      return res.status(400).json({ message: "Email and signature are required" });
+    }
+    try {
+      const user = await storage.getUserByEmail(email);
+      if (!user || !user.passkeyCredential) {
+        return res.status(401).json({ message: "Passkey is not configured for this user" });
+      }
+      const challenge = req.session.loginChallenge;
+      if (!challenge) {
+        return res.status(400).json({ message: "Challenge expired or invalid. Please try again." });
+      }
+      const publicKeyJwk = JSON.parse(user.passkeyCredential);
+      const pubKey = import_crypto2.default.createPublicKey({
+        key: publicKeyJwk,
+        format: "jwk"
+      });
+      const isVerified = import_crypto2.default.verify(
+        "sha256",
+        Buffer.from(challenge),
+        pubKey,
+        Buffer.from(signatureHex, "hex")
+      );
+      if (!isVerified) {
+        return res.status(401).json({ message: "Invalid passkey signature" });
+      }
+      delete req.session.loginChallenge;
+      if (user.twoFactorEnabled && user.twoFactorSecret) {
+        req.session.tempUserId = user.id;
+        return res.json({ twoFactorRequired: true });
+      }
+      req.session.userId = user.id;
+      res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName });
+    } catch (err) {
+      console.error("Passkey verification error:", err);
+      res.status(500).json({ message: err.message || "Passkey login failed" });
+    }
+  });
   app2.get("/api/auth/google/callback", async (req, res) => {
     const { code, state } = req.query;
     if (!code) {
@@ -98744,6 +98811,7 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
         "OPENAI_MODEL",
         "AI_PROVIDER_PRIORITY",
         "THEME_COLOR",
+        "PWA_ADMIN_PASSKEY_ONLY",
         "DIGITALOCEAN_API_KEY",
         "OPENVPN_DEFAULT_REGION",
         "OPENVPN_DEFAULT_SIZE",

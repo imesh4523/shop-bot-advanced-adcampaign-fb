@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,6 +39,7 @@ function hexToHsl(hex: string): string {
 }
 
 export default function SettingsPage() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [token, setToken] = useState("");
   const [geminiApiKey, setGeminiApiKey] = useState("");
@@ -85,6 +87,87 @@ export default function SettingsPage() {
   const [currencyRateLkr, setCurrencyRateLkr] = useState("300.0");
   const [currencyRateInr, setCurrencyRateInr] = useState("83.0");
   const [currencyRateEur, setCurrencyRateEur] = useState("0.92");
+
+  // Passkey State & Helper Functions
+  const [isPasskeyRegistering, setIsPasskeyRegistering] = useState(false);
+  const { data: pwaPasskeyOnlySetting } = useQuery<{ value: string }>({
+    queryKey: ["/api/settings/PWA_ADMIN_PASSKEY_ONLY"]
+  });
+  const forcePasskeyOnly = pwaPasskeyOnlySetting?.value === "true";
+
+  const pwaPasskeyOnlyMutation = useMutation({
+    mutationFn: async (value: boolean) => {
+      const res = await apiRequest("POST", "/api/settings", {
+        key: "PWA_ADMIN_PASSKEY_ONLY",
+        value: value ? "true" : "false"
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/PWA_ADMIN_PASSKEY_ONLY"] });
+      toast({ title: "Settings Saved", description: "PWA passkey security updated successfully." });
+    }
+  });
+
+  const registerDevicePasskey = async () => {
+    if (!user?.email) {
+      toast({ title: "Error", description: "Admin email not found.", variant: "destructive" });
+      return;
+    }
+
+    setIsPasskeyRegistering(true);
+    try {
+      const keyPair = await window.crypto.subtle.generateKey(
+        {
+          name: "RSASSA-PKCS1-v1_5",
+          modulusLength: 2048,
+          publicExponent: new Uint8Array([1, 0, 1]),
+          hash: "SHA-256",
+        },
+        true,
+        ["sign", "verify"]
+      );
+
+      const publicKeyJwk = await window.crypto.subtle.exportKey("jwk", keyPair.publicKey);
+
+      const res = await apiRequest("POST", "/api/auth/passkey-register", {
+        publicKeyJwk
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to register public key on the server");
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const req = indexedDB.open("PasskeysDB", 1);
+        req.onupgradeneeded = () => {
+          req.result.createObjectStore("keys");
+        };
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction("keys", "readwrite");
+          tx.objectStore("keys").put(keyPair.privateKey, user.email);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        };
+        req.onerror = () => reject(req.error);
+      });
+
+      toast({
+        title: "Passkey Registered",
+        description: "This device is now registered. You can log in using Passkey on this device!",
+      });
+    } catch (err: any) {
+      console.error("Passkey error:", err);
+      toast({
+        title: "Registration Failed",
+        description: err.message || "Failed to set up passkey.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsPasskeyRegistering(false);
+    }
+  };
 
   // 2FA state variables
   const [showSetup, setShowSetup] = useState(false);
@@ -1775,6 +1858,54 @@ export default function SettingsPage() {
                 )}
               </div>
             )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="max-w-2xl">
+        <Card className="glass-card border-0">
+          <div className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 p-6 border-b border-white/10">
+            <CardTitle className="text-2xl font-black tracking-tighter flex items-center gap-3">
+              <Lock className="w-6 h-6 text-purple-400" />
+              PWA Passkey Login Security
+            </CardTitle>
+            <CardDescription className="text-white/40">
+              Set up biometric/device passkey login for fast and secure access on the PWA app.
+            </CardDescription>
+          </div>
+          <CardContent className="p-6 space-y-6">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl">
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-white">Device Passkey Credentials</h4>
+                  <p className="text-xs text-white/40">
+                    {user?.passkeyCredential ? "✅ Passkey is configured on your account." : "❌ No passkey registered yet."}
+                  </p>
+                </div>
+                <Button
+                  onClick={registerDevicePasskey}
+                  disabled={isPasskeyRegistering}
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-2 rounded-xl transition-all"
+                >
+                  {isPasskeyRegistering ? <Loader2 className="w-4 h-4 animate-spin" /> : "Register Device Passkey"}
+                </Button>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl">
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-white">Force Passkey Login for PWA Admin</h4>
+                  <p className="text-xs text-white/40">Restrict login to passkeys only when logging in as Admin</p>
+                </div>
+                <Button
+                  variant={forcePasskeyOnly ? "default" : "outline"}
+                  onClick={() => pwaPasskeyOnlyMutation.mutate(!forcePasskeyOnly)}
+                  disabled={pwaPasskeyOnlyMutation.isPending}
+                  className="rounded-xl px-5"
+                >
+                  {pwaPasskeyOnlyMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (forcePasskeyOnly ? "Enabled" : "Disabled")}
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
