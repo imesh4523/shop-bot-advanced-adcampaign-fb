@@ -28,7 +28,8 @@ import {
   PlayCircle,
   Database,
   Paperclip,
-  FileText
+  FileText,
+  Lock
 } from "lucide-react";
 
 import { format } from "date-fns";
@@ -627,6 +628,11 @@ export default function MiniAppShop() {
 
   const handleCreateDeposit = async () => {
     try {
+      if (depositMethod === 'stripe' && isStripeLocked) {
+        toast({ title: "Stripe Payment Locked", description: "Stripe deposits are temporarily locked by the administrator.", variant: "destructive" });
+        return;
+      }
+
       const amt = parseFloat(depositAmount);
       if (isNaN(amt) || amt <= 0) {
         toast({ title: "Invalid Amount", description: "Please enter a positive number.", variant: "destructive" });
@@ -1127,6 +1133,12 @@ export default function MiniAppShop() {
       duration: 2000 
     });
   };
+
+  const { data: stripeEnabledSetting } = useQuery<{ value: string }>({
+    queryKey: ["/api/settings/STRIPE_ENABLED"],
+    staleTime: 0,
+  });
+  const isStripeLocked = stripeEnabledSetting?.value === "false";
 
 
 
@@ -2538,7 +2550,7 @@ export default function MiniAppShop() {
               </div>
 
               {/* Chat Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide min-h-[300px]">
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide min-h-0">
                 {chatMode === "ai" ? (
                   chatHistory.map((msg, i) => {
                     const showContactBtn = msg.role === 'bot' && (
@@ -2904,29 +2916,49 @@ export default function MiniAppShop() {
                           )
                         }
                       ] : [])
-                    ].map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => {
-                          if (m.id === 'bank_transfer') {
-                            handleBankTransferTopup();
-                            return;
-                          }
-                          setDepositMethod(m.id as any);
-                        }}
-                        className={`flex items-center gap-3 p-4 rounded-2xl border text-xs font-black uppercase tracking-wider transition-all ${
-                          depositMethod === m.id 
-                            ? 'bg-purple-600 text-white border-purple-600' 
-                            : 'bg-white dark:bg-card text-neutral-500 dark:text-neutral-400 border-purple-50/50 dark:border-white/5 hover:border-purple-200 dark:hover:border-purple-500'
-                        }`}
-                      >
-                        <span className="pointer-events-none flex items-center gap-3">
-                          {m.icon}
-                          {m.name}
-                        </span>
-                      </button>
-                    ))}
+                    ].map((m) => {
+                      const isStripe = m.id === 'stripe';
+                      const isLocked = isStripe && isStripeLocked;
+
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => {
+                            if (isLocked) {
+                              toast({
+                                title: "Method Locked 🔒",
+                                description: "Card deposits are temporarily disabled by the administrator. Please use another method.",
+                                variant: "destructive"
+                              });
+                              return;
+                            }
+                            if (m.id === 'bank_transfer') {
+                              handleBankTransferTopup();
+                              return;
+                            }
+                            setDepositMethod(m.id as any);
+                          }}
+                          className={`flex items-center gap-3 p-4 rounded-2xl border text-xs font-black uppercase tracking-wider transition-all relative overflow-hidden ${
+                            isLocked
+                              ? 'bg-neutral-100 dark:bg-white/5 text-neutral-400 dark:text-neutral-500 border-neutral-200 dark:border-white/5 opacity-50 cursor-not-allowed'
+                              : depositMethod === m.id 
+                                ? 'bg-purple-600 text-white border-purple-600' 
+                                : 'bg-white dark:bg-card text-neutral-500 dark:text-neutral-400 border-purple-50/50 dark:border-white/5 hover:border-purple-200 dark:hover:border-purple-500'
+                          }`}
+                        >
+                          <span className="pointer-events-none flex items-center gap-3 w-full justify-between">
+                            <span className="flex items-center gap-3">
+                              {m.icon}
+                              {m.name}
+                            </span>
+                            {isLocked && (
+                              <Lock className="w-3.5 h-3.5 text-neutral-400 dark:text-neutral-500" />
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
