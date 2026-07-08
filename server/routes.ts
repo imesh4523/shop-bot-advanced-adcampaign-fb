@@ -1524,7 +1524,7 @@ export async function registerRoutes(
   // Create deposit request
   app.post("/api/mini/deposit", verifyMiniAppAuth, async (req, res) => {
     const tgUser = (req as any).tgUser;
-    const { amount, method, currency } = req.body;
+    const { amount, method, currency, exchangeRate } = req.body;
 
     if (!amount || isNaN(amount) || amount <= 0) {
       return res.status(400).json({ message: "Invalid amount" });
@@ -1582,7 +1582,8 @@ export async function registerRoutes(
           paymentMethod: payMethod,
           currency: currency || 'USD',
           status: 'pending',
-          cryptomusUuid: binanceRemark
+          cryptomusUuid: binanceRemark,
+          exchangeRate: exchangeRate || (currency === 'LKR' ? rateLkr.toString() : undefined)
         });
 
         let walletAddress = "";
@@ -1693,8 +1694,7 @@ export async function registerRoutes(
         let expectedAmount = payment.amount / 100;
         
         if (payment.currency === 'LKR') {
-          const rateLkrSetting = await storage.getSetting("CURRENCY_RATE_LKR");
-          const rateLkr = rateLkrSetting?.value ? parseFloat(rateLkrSetting.value) : 300;
+          const rateLkr = payment.exchangeRate ? parseFloat(payment.exchangeRate) : 300;
           expectedAmount = expectedAmount / rateLkr;
         }
 

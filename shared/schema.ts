@@ -79,6 +79,7 @@ export const payments = pgTable("payments", {
   paymentMethod: text("payment_method").notNull(),
   externalId: text("external_id"),
   cryptomusUuid: text("cryptomus_uuid"),
+  exchangeRate: text("exchange_rate"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

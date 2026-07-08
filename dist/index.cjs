@@ -46447,6 +46447,7 @@ var init_schema2 = __esm({
       paymentMethod: text("payment_method").notNull(),
       externalId: text("external_id"),
       cryptomusUuid: text("cryptomus_uuid"),
+      exchangeRate: text("exchange_rate"),
       createdAt: timestamp("created_at").defaultNow(),
       updatedAt: timestamp("updated_at").defaultNow()
     });
@@ -96676,7 +96677,7 @@ ${extraInstructions}
   });
   app2.post("/api/mini/deposit", verifyMiniAppAuth, async (req, res) => {
     const tgUser = req.tgUser;
-    const { amount, method, currency } = req.body;
+    const { amount, method, currency, exchangeRate } = req.body;
     if (!amount || isNaN(amount) || amount <= 0) {
       return res.status(400).json({ message: "Invalid amount" });
     }
@@ -96724,7 +96725,8 @@ ${extraInstructions}
           paymentMethod: payMethod,
           currency: currency || "USD",
           status: "pending",
-          cryptomusUuid: binanceRemark
+          cryptomusUuid: binanceRemark,
+          exchangeRate: exchangeRate || (currency === "LKR" ? rateLkr.toString() : void 0)
         });
         let walletAddress = "";
         if (payMethod === "trc20") {
@@ -96810,8 +96812,7 @@ ${extraInstructions}
         const expectedRemark = (payment.cryptomusUuid || "").trim().toUpperCase();
         let expectedAmount = payment.amount / 100;
         if (payment.currency === "LKR") {
-          const rateLkrSetting = await storage.getSetting("CURRENCY_RATE_LKR");
-          const rateLkr = rateLkrSetting?.value ? parseFloat(rateLkrSetting.value) : 300;
+          const rateLkr = payment.exchangeRate ? parseFloat(payment.exchangeRate) : 300;
           expectedAmount = expectedAmount / rateLkr;
         }
         const verification = await verifyBinancePayTransaction(expectedRemark, expectedAmount);

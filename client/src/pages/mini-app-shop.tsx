@@ -461,7 +461,7 @@ export default function MiniAppShop() {
   const [depositAmount, setDepositAmount] = useState("10.00");
   const [depositMethod, setDepositMethod] = useState<"stripe" | "trc20" | "aptos" | "binance">("binance");
   const [selectedDepositCurrency, setSelectedDepositCurrency] = useState<"USD" | "LKR" | "USDT" | "TRX">("USD");
-  const [activeDeposit, setActiveDeposit] = useState<{ paymentId: number; walletAddress: string; amount: number; method: string; remark?: string } | null>(null);
+  const [activeDeposit, setActiveDeposit] = useState<{ paymentId: number; walletAddress: string; amount: number; method: string; remark?: string; currency?: string; exchangeRate?: string } | null>(null);
   const [txidInput, setTxidInput] = useState("");
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
 
@@ -569,7 +569,8 @@ export default function MiniAppShop() {
       const res = await miniApiRequest("POST", "/api/mini/deposit", {
         amount: amt,
         method: depositMethod,
-        currency: selectedDepositCurrency
+        currency: selectedDepositCurrency,
+        exchangeRate: selectedDepositCurrency === 'LKR' ? liveLkrRate.toString() : undefined
       });
       const data = await res.json();
 
@@ -583,7 +584,9 @@ export default function MiniAppShop() {
           walletAddress: data.walletAddress,
           amount: data.amount,
           method: depositMethod,
-          remark: data.remark
+          remark: data.remark,
+          currency: selectedDepositCurrency,
+          exchangeRate: selectedDepositCurrency === 'LKR' ? liveLkrRate.toString() : undefined
         });
       }
     } catch (err: any) {
@@ -608,7 +611,9 @@ export default function MiniAppShop() {
       walletAddress,
       amount: payment.amount / 100,
       method: method as any,
-      remark: payment.cryptomusUuid || ""
+      remark: payment.cryptomusUuid || "",
+      currency: payment.currency,
+      exchangeRate: payment.exchangeRate
     });
     setIsDepositModalOpen(true);
   };
@@ -2772,8 +2777,9 @@ export default function MiniAppShop() {
                     <span className="font-bold text-neutral-400 uppercase tracking-widest">Send Exactly:</span>
                     <span className="font-black text-neutral-900 dark:text-white flex items-center">
                       {(() => {
-                        const rateLkr = liveLkrRate;
-                        if (activeDeposit.method === 'binance' && selectedDepositCurrency === 'LKR') {
+                        const depCurrency = activeDeposit.currency || selectedDepositCurrency;
+                        const rateLkr = activeDeposit.exchangeRate ? parseFloat(activeDeposit.exchangeRate) : liveLkrRate;
+                        if (activeDeposit.method === 'binance' && depCurrency === 'LKR') {
                           // Convert LKR → USDT at Binance P2P rate (rateLkr = LKR per 1 USDT)
                           const usdt = activeDeposit.amount / rateLkr;
                           const usdtText = usdt.toFixed(4);
@@ -2798,13 +2804,13 @@ export default function MiniAppShop() {
                         
                         let amtText = "";
                         let labelText = "";
-                        if (selectedDepositCurrency === 'LKR') {
+                        if (depCurrency === 'LKR') {
                           amtText = activeDeposit.amount.toFixed(2);
                           labelText = `Rs. ${amtText} LKR`;
-                        } else if (selectedDepositCurrency === 'USDT') {
+                        } else if (depCurrency === 'USDT') {
                           amtText = activeDeposit.amount.toFixed(2);
                           labelText = `${amtText} USDT`;
-                        } else if (selectedDepositCurrency === 'TRX') {
+                        } else if (depCurrency === 'TRX') {
                           amtText = activeDeposit.amount.toFixed(4);
                           labelText = `${amtText} TRX`;
                         } else {
@@ -2829,12 +2835,15 @@ export default function MiniAppShop() {
                       })()}
                     </span>
                   </div>
-                  {activeDeposit.method === 'binance' && selectedDepositCurrency === 'LKR' && (
+                  {activeDeposit.method === 'binance' && (activeDeposit.currency || selectedDepositCurrency) === 'LKR' && (
                     <div className="flex justify-between items-center text-[10px] text-neutral-400">
                       <span className="uppercase tracking-widest font-bold">Rate:</span>
-                      <span>1 USDT ≈ Rs. {liveLkrRate.toFixed(2)} LKR</span>
-                      {p2pRateData && !p2pRateData.cached && (
+                      <span>1 USDT ≈ Rs. {(activeDeposit.exchangeRate ? parseFloat(activeDeposit.exchangeRate) : liveLkrRate).toFixed(2)} LKR</span>
+                      {!activeDeposit.exchangeRate && p2pRateData && !p2pRateData.cached && (
                         <span className="ml-2 text-[9px] text-teal-400 font-bold uppercase">● Live</span>
+                      )}
+                      {activeDeposit.exchangeRate && (
+                        <span className="ml-2 text-[9px] text-neutral-400 font-bold uppercase">🔒 Locked</span>
                       )}
                     </div>
                   )}
