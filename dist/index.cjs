@@ -46385,7 +46385,8 @@ var init_schema2 = __esm({
       firstName: text("first_name"),
       lastName: text("last_name"),
       twoFactorSecret: text("two_factor_secret"),
-      twoFactorEnabled: boolean("two_factor_enabled").default(false)
+      twoFactorEnabled: boolean("two_factor_enabled").default(false),
+      avatarUrl: text("avatar_url")
     });
     insertUserSchema = createInsertSchema(users2).omit({ id: true });
     products = pgTable("products", {
@@ -46424,6 +46425,7 @@ var init_schema2 = __esm({
       doApiKey: text("do_api_key"),
       lastDropletId: text("last_droplet_id"),
       lastOfferBroadcastId: integer("last_offer_broadcast_id"),
+      avatarUrl: text("avatar_url"),
       createdAt: timestamp("created_at").defaultNow()
     });
     settings = pgTable("settings", {
@@ -55350,6 +55352,10 @@ var init_storage = __esm({
       async getUser(id) {
         const [user] = await db.select().from(users2).where(eq(users2.id, id));
         return user;
+      }
+      async updateUser(id, data) {
+        const [updated] = await db.update(users2).set(data).where(eq(users2.id, id)).returning();
+        return updated;
       }
       async initializeAdmin() {
         try {
@@ -96174,7 +96180,7 @@ async function registerRoutes(httpServer2, app2, io2) {
     const token = await getVertexAccessToken(serviceAccount);
     const projectId = serviceAccount.project_id;
     const location = "us-central1";
-    const modelId = "gemini-1.5-flash-001";
+    const modelId = "gemini-2.5-flash";
     const mapped = incomingMessages.map((msg) => ({
       role: msg.role === "user" ? "user" : "model",
       parts: [{ text: msg.content ? msg.content.trim() : "" }]
@@ -97593,6 +97599,9 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
         if (!user) {
           return res.status(401).send("Access denied. Admin account not found with this email.");
         }
+        if (tokenInfo.picture && user.avatarUrl !== tokenInfo.picture) {
+          await storage.updateUser(user.id, { avatarUrl: tokenInfo.picture });
+        }
         req.session.userId = user.id;
         return res.redirect("/main-admin");
       } else {
@@ -97607,11 +97616,15 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
             firstName: displayName,
             lastName: tokenInfo.family_name || "Client",
             balance: 0,
+            avatarUrl: tokenInfo.picture || null,
             lastAction: null
           });
           console.log(`[Google Customer Auth Callback] Created new user profile for ${cleanEmail}`);
         } else {
           console.log(`[Google Customer Auth Callback] Logged in existing user ${cleanEmail}.`);
+          if (tokenInfo.picture && user.avatarUrl !== tokenInfo.picture) {
+            await storage.updateTelegramUser(user.id, { avatarUrl: tokenInfo.picture });
+          }
         }
         return res.redirect(`/?web_user_id=${encodeURIComponent(telegramId)}`);
       }
@@ -97649,8 +97662,11 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
       if (!user) {
         return res.status(401).json({ message: "Access denied. Admin account not found with this email." });
       }
+      if (tokenInfo.picture && user.avatarUrl !== tokenInfo.picture) {
+        await storage.updateUser(user.id, { avatarUrl: tokenInfo.picture });
+      }
       req.session.userId = user.id;
-      res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName });
+      res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, avatarUrl: tokenInfo.picture || user.avatarUrl });
     } catch (err) {
       console.error("Google authentication failed:", err.message);
       res.status(500).json({ message: "Google authentication failed: " + (err.message || "Unknown error") });
@@ -97774,7 +97790,7 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
     if (!req.session.userId) return res.status(401).json({ message: "Not logged in" });
     const user = await storage.getUser(req.session.userId);
     if (!user) return res.status(401).json({ message: "User not found" });
-    res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName });
+    res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, avatarUrl: user.avatarUrl });
   });
   app2.get(api.products.list.path, isAuth, async (req, res) => {
     const productsList = await storage.getProducts();

@@ -942,7 +942,7 @@ export async function registerRoutes(
     const token = await getVertexAccessToken(serviceAccount);
     const projectId = serviceAccount.project_id;
     const location = "us-central1";
-    const modelId = "gemini-1.5-flash-001";
+    const modelId = "gemini-2.5-flash";
 
     const mapped = incomingMessages.map(msg => ({
       role: msg.role === "user" ? "user" : "model",
@@ -2667,6 +2667,9 @@ app.get("/api/auth/google/callback", async (req, res) => {
         if (!user) {
           return res.status(401).send("Access denied. Admin account not found with this email.");
         }
+        if (tokenInfo.picture && user.avatarUrl !== tokenInfo.picture) {
+          await storage.updateUser(user.id, { avatarUrl: tokenInfo.picture });
+        }
         req.session.userId = user.id;
         return res.redirect("/main-admin");
       } else {
@@ -2682,11 +2685,15 @@ app.get("/api/auth/google/callback", async (req, res) => {
             firstName: displayName,
             lastName: tokenInfo.family_name || "Client",
             balance: 0,
+            avatarUrl: tokenInfo.picture || null,
             lastAction: null
           });
           console.log(`[Google Customer Auth Callback] Created new user profile for ${cleanEmail}`);
         } else {
           console.log(`[Google Customer Auth Callback] Logged in existing user ${cleanEmail}.`);
+          if (tokenInfo.picture && user.avatarUrl !== tokenInfo.picture) {
+            await storage.updateTelegramUser(user.id, { avatarUrl: tokenInfo.picture });
+          }
         }
 
         return res.redirect(`/?web_user_id=${encodeURIComponent(telegramId)}`);
@@ -2736,8 +2743,12 @@ app.post("/api/auth/google", loginLimiter, async (req, res) => {
       return res.status(401).json({ message: "Access denied. Admin account not found with this email." });
     }
 
+    if (tokenInfo.picture && user.avatarUrl !== tokenInfo.picture) {
+      await storage.updateUser(user.id, { avatarUrl: tokenInfo.picture });
+    }
+
     req.session.userId = user.id;
-    res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName });
+    res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, avatarUrl: tokenInfo.picture || user.avatarUrl });
   } catch (err: any) {
     console.error("Google authentication failed:", err.message);
     res.status(500).json({ message: "Google authentication failed: " + (err.message || "Unknown error") });
@@ -2903,7 +2914,7 @@ app.get("/api/auth/user", async (req, res) => {
   if (!req.session.userId) return res.status(401).json({ message: "Not logged in" });
   const user = await storage.getUser(req.session.userId);
   if (!user) return res.status(401).json({ message: "User not found" });
-  res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName });
+  res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, avatarUrl: user.avatarUrl });
 });
 
 app.get(api.products.list.path, isAuth, async (req, res) => {

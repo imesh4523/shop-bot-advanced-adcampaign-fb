@@ -13,6 +13,7 @@ export const users = pgTable("users", {
   lastName: text("last_name"),
   twoFactorSecret: text("two_factor_secret"),
   twoFactorEnabled: boolean("two_factor_enabled").default(false),
+  avatarUrl: text("avatar_url"),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
@@ -54,6 +55,7 @@ export const telegramUsers = pgTable("telegram_users", {
   doApiKey: text("do_api_key"),
   lastDropletId: text("last_droplet_id"),
   lastOfferBroadcastId: integer("last_offer_broadcast_id"),
+  avatarUrl: text("avatar_url"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
