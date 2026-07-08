@@ -742,6 +742,60 @@ export default function MiniAppShop() {
   const [uploadedAttachment, setUploadedAttachment] = useState<{ url: string; type: 'image' | 'pdf' | 'document'; name: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const compressImage = (file: File): Promise<Blob | File> => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith("image/") || file.type.includes("gif") || file.type.includes("svg")) {
+        return resolve(file);
+      }
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let width = img.width;
+          let height = img.height;
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return resolve(file);
+
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                resolve(blob);
+              } else {
+                resolve(file);
+              }
+            },
+            "image/jpeg",
+            0.75
+          );
+        };
+        img.onerror = () => resolve(file);
+        img.src = event.target?.result as string;
+      };
+      reader.onerror = () => resolve(file);
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -760,10 +814,13 @@ export default function MiniAppShop() {
     }
 
     setIsUploadingFile(true);
-    const formData = new FormData();
-    formData.append("file", file);
-
+    
     try {
+      // Compress the image before uploading (especially for high-res camera captures on iOS Safari)
+      const uploadFile = await compressImage(file);
+      
+      const formData = new FormData();
+      formData.append("file", uploadFile, file.name);
       const initData = getTelegramInitData();
       // Always ensure a web_user_id exists (same logic as miniApiRequest)
       let webUserId = safeLocalStorage.getItem("web_user_id") || "";
