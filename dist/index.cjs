@@ -96535,9 +96535,24 @@ ${extraInstructions}
     }
     return res.status(401).json({ message: "Unauthorized access to support channel" });
   };
-  app2.post("/api/support/upload", verifySupportChatAuth, upload.single("file"), async (req, res) => {
+  const uploadMiddleware = upload.single("file");
+  app2.post("/api/support/upload", verifySupportChatAuth, (req, res, next) => {
+    uploadMiddleware(req, res, (err) => {
+      if (err) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(413).json({ message: "File is too large. Maximum file size is 10MB." });
+        }
+        return res.status(400).json({ message: err.message || "File upload error." });
+      }
+      next();
+    });
+  }, async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
+    }
+    const allowedMimeTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml", "application/pdf"];
+    if (!allowedMimeTypes.some((m) => req.file.mimetype.startsWith("image/") || req.file.mimetype === "application/pdf")) {
+      return res.status(400).json({ message: "Only images and PDF files are allowed." });
     }
     try {
       const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);

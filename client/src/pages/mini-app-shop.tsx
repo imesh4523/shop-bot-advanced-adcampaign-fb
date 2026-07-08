@@ -666,13 +666,31 @@ export default function MiniAppShop() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Reset input so the same file can be re-selected after a failed attempt
+    e.target.value = "";
+
+    // Client-side file size check (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "Maximum file size is 10MB. Please choose a smaller file.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsUploadingFile(true);
     const formData = new FormData();
     formData.append("file", file);
 
     try {
       const initData = getTelegramInitData();
-      const webUserId = localStorage.getItem("web_user_id") || "";
+      // Always ensure a web_user_id exists (same logic as miniApiRequest)
+      let webUserId = localStorage.getItem("web_user_id") || "";
+      if (!initData && !webUserId) {
+        webUserId = "web_guest_" + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem("web_user_id", webUserId);
+      }
 
       const res = await fetch("/api/support/upload", {
         method: "POST",
@@ -684,7 +702,12 @@ export default function MiniAppShop() {
       });
 
       if (!res.ok) {
-        throw new Error("Upload failed");
+        let errMsg = "Upload failed";
+        try {
+          const errData = await res.json();
+          errMsg = errData.message || errMsg;
+        } catch {}
+        throw new Error(errMsg);
       }
 
       const data = await res.json();

@@ -248,6 +248,19 @@ export default function SupportChatPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Reset input so same file can be re-selected after a failure
+    e.target.value = "";
+
+    // Client-side file size check (10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "Maximum file size is 10MB. Please choose a smaller file.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsUploadingFile(true);
     const formData = new FormData();
     formData.append("file", file);
@@ -255,11 +268,17 @@ export default function SupportChatPage() {
     try {
       const res = await fetch("/api/support/upload", {
         method: "POST",
+        credentials: "include",
         body: formData
       });
 
       if (!res.ok) {
-        throw new Error("Upload failed");
+        let errMsg = "Upload failed";
+        try {
+          const errData = await res.json();
+          errMsg = errData.message || errMsg;
+        } catch {}
+        throw new Error(errMsg);
       }
 
       const data = await res.json();

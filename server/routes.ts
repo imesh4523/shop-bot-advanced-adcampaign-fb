@@ -1343,9 +1343,26 @@ export async function registerRoutes(
   };
 
   // Support Chat File Upload Endpoint
-  app.post("/api/support/upload", verifySupportChatAuth, upload.single('file'), async (req: any, res) => {
+  // Multer errors (e.g., file too large) are handled via inline error middleware
+  const uploadMiddleware = upload.single('file');
+  app.post("/api/support/upload", verifySupportChatAuth, (req: any, res: any, next: any) => {
+    uploadMiddleware(req, res, (err: any) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(413).json({ message: "File is too large. Maximum file size is 10MB." });
+        }
+        return res.status(400).json({ message: err.message || "File upload error." });
+      }
+      next();
+    });
+  }, async (req: any, res: any) => {
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
+    }
+    // Only allow images and PDFs
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'application/pdf'];
+    if (!allowedMimeTypes.some(m => req.file.mimetype.startsWith('image/') || req.file.mimetype === 'application/pdf')) {
+      return res.status(400).json({ message: "Only images and PDF files are allowed." });
     }
     try {
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
