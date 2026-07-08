@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { generateTOTP, getRemainingSeconds } from "@/lib/totp";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Product, TelegramUser, Order, Payment, SpecialOffer, SupportMessage } from "@shared/schema";
+import type { Product, TelegramUser, Order, Payment, SpecialOffer, SupportMessage } from "@shared/schema";
 import { io } from "socket.io-client";
 import { getTelegramInitData, expandTelegramWebApp } from "@/lib/telegram";
 import { queryClient } from "@/lib/queryClient";
@@ -132,6 +132,36 @@ const getProviderTheme = (name: string, type: string) => {
       color: "text-[#F3BA2F]",
       bg: "bg-[#F3BA2F]/5",
       hover: "group-hover:bg-[#F3BA2F]"
+    },
+    claude: {
+      logo: "https://upload.wikimedia.org/wikipedia/commons/d/d4/Claude_AI_symbol.svg",
+      color: "text-[#D97706]",
+      bg: "bg-[#D97706]/5",
+      hover: "group-hover:bg-[#D97706]"
+    },
+    gemini: {
+      logo: "https://upload.wikimedia.org/wikipedia/commons/1/10/Google_Gemini_icon_2025.svg",
+      color: "text-[#1A73E8]",
+      bg: "bg-[#1A73E8]/5",
+      hover: "group-hover:bg-[#1A73E8]"
+    },
+    cursor: {
+      logo: "https://www.cursor.com/assets/images/logo.svg",
+      color: "text-white",
+      bg: "bg-white/5",
+      hover: "group-hover:bg-white/20"
+    },
+    chatgpt: {
+      logo: "https://upload.wikimedia.org/wikipedia/commons/0/04/ChatGPT_logo.svg",
+      color: "text-[#10A37F]",
+      bg: "bg-[#10A37F]/5",
+      hover: "group-hover:bg-[#10A37F]"
+    },
+    capcut: {
+      logo: "https://cdn.jsdelivr.net/npm/@thesvg/icons/icons/capcut.svg",
+      color: "text-[#00C4FF]",
+      bg: "bg-[#00C4FF]/5",
+      hover: "group-hover:bg-[#00C4FF]"
     }
   };
 
@@ -144,6 +174,11 @@ const getProviderTheme = (name: string, type: string) => {
   else if (n.includes("hetzner")) target = themes.hetzner;
   else if (n.includes("google") || n.includes("gcp")) target = themes.google;
   else if (n.includes("binance")) target = themes.binance;
+  else if (n.includes("claude")) target = themes.claude;
+  else if (n.includes("gemini")) target = themes.gemini;
+  else if (n.includes("cursor")) target = themes.cursor;
+  else if (n.includes("chatgpt") || n.includes("openai") || n.includes("gpt")) target = themes.chatgpt;
+  else if (n.includes("capcut") || n.includes("cap cut")) target = themes.capcut;
 
   if (target) {
     return {
@@ -558,6 +593,18 @@ export default function MiniAppShop() {
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const formatTime = (dateStr: any) => {
+    if (!dateStr) return "";
+    try {
+      const normalizedStr = typeof dateStr === 'string' ? dateStr.replace(' ', 'T') : dateStr;
+      const d = new Date(normalizedStr);
+      if (isNaN(d.getTime())) return "";
+      return format(d, "hh:mm a");
+    } catch (e) {
+      return "";
+    }
   };
 
   useEffect(() => {
@@ -1172,6 +1219,11 @@ export default function MiniAppShop() {
             { id: 'vultr', label: 'Vultr', icon: <SiVultr className="w-4 h-4" /> },
             { id: 'hetzner', label: 'Hetzner', icon: <SiHetzner className="w-4 h-4" /> },
             { id: 'oracle', label: 'Oracle', icon: <Database className="w-4 h-4" /> },
+            { id: 'chatgpt', label: 'ChatGPT', icon: <img src="https://upload.wikimedia.org/wikipedia/commons/0/04/ChatGPT_logo.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
+            { id: 'claude', label: 'Claude', icon: <img src="https://upload.wikimedia.org/wikipedia/commons/d/d4/Claude_AI_symbol.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
+            { id: 'gemini', label: 'Gemini', icon: <img src="https://upload.wikimedia.org/wikipedia/commons/1/10/Google_Gemini_icon_2025.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
+            { id: 'cursor', label: 'Cursor', icon: <img src="https://www.cursor.com/assets/images/logo.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
+            { id: 'capcut', label: 'CapCut', icon: <img src="https://cdn.jsdelivr.net/npm/@thesvg/icons/icons/capcut.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
           ].map((cat) => (
             <button
               key={cat.id}
@@ -1195,6 +1247,8 @@ export default function MiniAppShop() {
               const n = (p.name + " " + p.type).toLowerCase();
               if (selectedCategory === 'aws') return n.includes('aws') || n.includes('amazon');
               if (selectedCategory === 'digitalocean') return n.includes('digitalocean') || n.includes('digital ocean');
+              if (selectedCategory === 'chatgpt') return n.includes('chatgpt') || n.includes('openai') || n.includes('gpt');
+              if (selectedCategory === 'capcut') return n.includes('capcut') || n.includes('cap cut');
               return n.includes(selectedCategory);
             }).map((product, index) => {
               const theme = getProviderTheme(product.name, product.type);
@@ -2097,7 +2151,7 @@ export default function MiniAppShop() {
                                 {msg.message}
                               </div>
                               <div className="text-[7px] text-white/30 text-right mt-1 font-semibold uppercase">
-                                {msg.createdAt ? format(new Date(msg.createdAt), "hh:mm a") : ""}
+                                {formatTime(msg.createdAt)}
                               </div>
                             </div>
                           </div>

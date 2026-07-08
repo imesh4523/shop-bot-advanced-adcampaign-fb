@@ -410,7 +410,7 @@ function EditProductDialog({
 }) {
   const { toast } = useToast();
   const [customType, setCustomType] = useState(
-    ["AWS", "DigitalOcean", "Google Cloud", "Azure", "Linode", "Other"].includes(product.type) 
+    ["AWS", "DigitalOcean", "Google Cloud", "Azure", "Linode", "ChatGPT", "Claude", "Gemini", "Cursor", "CapCut", "Other"].includes(product.type) 
       ? "" 
       : product.type
   );
@@ -419,7 +419,7 @@ function EditProductDialog({
     resolver: zodResolver(productFormSchema),
     defaultValues: {
       name: product.name,
-      type: ["AWS", "DigitalOcean", "Google Cloud", "Azure", "Linode", "Other"].includes(product.type) 
+      type: ["AWS", "DigitalOcean", "Google Cloud", "Azure", "Linode", "ChatGPT", "Claude", "Gemini", "Cursor", "CapCut", "Other"].includes(product.type) 
         ? product.type 
         : "Custom",
       description: product.description || "",
@@ -495,6 +495,11 @@ function EditProductDialog({
                         <SelectItem value="Google Cloud">Google Cloud</SelectItem>
                         <SelectItem value="Azure">Azure</SelectItem>
                         <SelectItem value="Linode">Linode</SelectItem>
+                        <SelectItem value="ChatGPT">ChatGPT</SelectItem>
+                        <SelectItem value="Claude">Claude</SelectItem>
+                        <SelectItem value="Gemini">Gemini</SelectItem>
+                        <SelectItem value="Cursor">Cursor</SelectItem>
+                        <SelectItem value="CapCut">CapCut</SelectItem>
                         <SelectItem value="Custom">Custom (Enter below)</SelectItem>
                         <SelectItem value="Other">Other</SelectItem>
                       </SelectContent>
@@ -738,6 +743,11 @@ function CreateProductDialog({ open, onOpenChange }: { open: boolean, onOpenChan
                         <SelectItem value="Google Cloud">Google Cloud</SelectItem>
                         <SelectItem value="Azure">Azure</SelectItem>
                         <SelectItem value="Linode">Linode</SelectItem>
+                        <SelectItem value="ChatGPT">ChatGPT</SelectItem>
+                        <SelectItem value="Claude">Claude</SelectItem>
+                        <SelectItem value="Gemini">Gemini</SelectItem>
+                        <SelectItem value="Cursor">Cursor</SelectItem>
+                        <SelectItem value="CapCut">CapCut</SelectItem>
                         <SelectItem value="Custom">Custom (Enter below)</SelectItem>
                         <SelectItem value="Other">Other</SelectItem>
                       </SelectContent>
