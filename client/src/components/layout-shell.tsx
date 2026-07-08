@@ -138,8 +138,28 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
         <div className="flex-1 overflow-hidden min-h-0">
           <NavContent />
         </div>
-        <div className="mt-auto p-8 border-t border-white/5 bg-white/[0.01] space-y-6">
-          <div className="relative py-4 group/watermark">
+        <div className="mt-auto p-6 border-t border-white/5 bg-white/[0.01] space-y-4">
+          {/* Admin profile card */}
+          {user && (
+            <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-300 group/profile">
+              <Avatar className="h-10 w-10 ring-2 ring-purple-500/40 shrink-0">
+                <AvatarImage src={(user as any)?.avatarUrl || user?.profileImageUrl || undefined} alt={user?.firstName || 'Admin'} />
+                <AvatarFallback className="bg-purple-700 text-white font-black text-sm">{user?.firstName?.[0]?.toUpperCase() || 'A'}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-black text-white truncate">{user?.firstName} {user?.lastName}</p>
+                <p className="text-[10px] text-white/40 font-bold truncate">{user?.email}</p>
+              </div>
+              <button
+                onClick={() => logout()}
+                className="text-white/30 hover:text-red-400 transition-colors p-1 rounded-lg hover:bg-red-400/10"
+                title="Logout"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+          <div className="relative py-2 group/watermark">
             <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-purple-500/10 blur-xl opacity-0 group-hover/watermark:opacity-100 transition-opacity duration-700" />
             <div className="relative text-[10px] text-white/20 font-black uppercase tracking-[0.3em] text-center transition-all duration-500 group-hover/watermark:text-purple-400 group-hover/watermark:scale-110 group-hover/watermark:tracking-[0.4em] drop-shadow-[0_0_10px_rgba(168,85,247,0.5)]">
               Developed by <span className="text-white/40 group-hover/watermark:text-white transition-colors">Rochana Imesh</span>
@@ -164,8 +184,8 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                 <Avatar className="h-9 w-9">
-                  <AvatarImage src={user?.profileImageUrl || undefined} alt={user?.firstName || 'User'} />
-                  <AvatarFallback>{user?.firstName?.[0] || 'U'}</AvatarFallback>
+                  <AvatarImage src={(user as any)?.avatarUrl || user?.profileImageUrl || undefined} alt={user?.firstName || 'User'} />
+                  <AvatarFallback className="bg-purple-700 text-white font-black">{user?.firstName?.[0]?.toUpperCase() || 'A'}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>

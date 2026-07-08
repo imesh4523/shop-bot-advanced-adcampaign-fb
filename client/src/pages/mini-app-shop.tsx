@@ -205,9 +205,9 @@ const getProviderIcon = (name: string, type: string) => {
 };
 
 // User Profile Photo Component
-const UserAvatar = ({ fallback: Fallback, className }: { fallback: any, className?: string }) => {
+const UserAvatar = ({ fallback: Fallback, className, googleAvatarUrl }: { fallback: any, className?: string, googleAvatarUrl?: string | null }) => {
   const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
-  const photoUrl = tgUser?.photo_url;
+  const photoUrl = googleAvatarUrl || tgUser?.photo_url;
 
   if (photoUrl) {
     return (
@@ -218,6 +218,7 @@ const UserAvatar = ({ fallback: Fallback, className }: { fallback: any, classNam
         onError={(e) => {
           (e.target as any).style.display = 'none';
         }}
+        referrerPolicy="no-referrer"
       />
     );
   }
@@ -1682,7 +1683,7 @@ export default function MiniAppShop() {
             <div className="relative group">
               <div className="absolute -inset-1.5 bg-gradient-to-tr from-purple-600 via-pink-500 to-blue-600 rounded-[35%] blur-sm opacity-70 group-hover:opacity-100 transition duration-700 group-hover:duration-300"></div>
               <div className="relative w-24 h-24 rounded-[30%] bg-neutral-900 flex items-center justify-center text-white shadow-2xl rotate-12 group-hover:rotate-0 transition-transform duration-500 overflow-hidden ring-4 ring-white dark:ring-neutral-900">
-                <UserAvatar fallback={UserIcon} className="w-full h-full -rotate-12 group-hover:rotate-0 transition-transform duration-500" />
+                <UserAvatar fallback={UserIcon} className="w-full h-full -rotate-12 group-hover:rotate-0 transition-transform duration-500" googleAvatarUrl={user?.avatarUrl} />
               </div>
               <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-green-500 border-4 border-white dark:border-neutral-900 flex items-center justify-center shadow-lg z-20">
                 <CheckCircle2 className="w-4 h-4 text-white" />
@@ -1937,7 +1938,7 @@ export default function MiniAppShop() {
               whileHover={{ rotate: 10 }}
               className="w-11 h-11 rounded-2xl bg-neutral-900 flex items-center justify-center shadow-lg transition-all overflow-hidden"
             >
-              <UserAvatar fallback={UserIcon} className="w-full h-full" />
+              <UserAvatar fallback={UserIcon} className="w-full h-full" googleAvatarUrl={user?.avatarUrl} />
             </motion.div>
             <div className="flex flex-col">
               <span className="text-[9px] font-black text-neutral-400 dark:text-neutral-500 uppercase tracking-[0.25em] leading-none mb-1">
