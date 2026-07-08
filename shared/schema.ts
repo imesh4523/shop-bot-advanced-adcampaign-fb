@@ -27,6 +27,7 @@ export const products = pgTable("products", {
   price: integer("price").notNull(), // In cents
   currency: text("currency").notNull().default("USD"),
   status: text("status").notNull().default("available"),
+  sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -306,6 +307,8 @@ export const supportMessages = pgTable("support_messages", {
   lastName: text("last_name"),
   message: text("message").notNull(),
   sender: text("sender").notNull(), // 'user' or 'admin'
+  attachmentUrl: text("attachment_url"),
+  attachmentType: text("attachment_type"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

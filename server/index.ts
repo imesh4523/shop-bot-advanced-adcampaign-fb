@@ -126,4 +126,4 @@ async function startServer() {
   }
 }
 
-startServer();
+startServer(); // trigger watch reload

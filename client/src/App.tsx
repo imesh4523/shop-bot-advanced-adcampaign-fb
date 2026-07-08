@@ -1,5 +1,5 @@
-import { lazy, Suspense } from "react";
-import { Switch, Route, Redirect } from "wouter";
+import { lazy, Suspense, useEffect } from "react";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -63,6 +63,18 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 
 function Router() {
   const { user, isLoading } = useAuth();
+  const [location] = useLocation();
+
+  useEffect(() => {
+    const manifestLink = document.getElementById('manifest-placeholder');
+    if (manifestLink) {
+      if (location.startsWith('/main-admin')) {
+        manifestLink.setAttribute('href', '/manifest-admin.json');
+      } else {
+        manifestLink.setAttribute('href', '/manifest.json');
+      }
+    }
+  }, [location]);
 
   if (isLoading) {
     return <PageLoader />;

@@ -1,7 +1,7 @@
 {
   "name": "Shopeefy",
   "short_name": "Shopeefy",
-  "description": "Shopeefy Admin Panel",
+  "description": "Shopeefy User App",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

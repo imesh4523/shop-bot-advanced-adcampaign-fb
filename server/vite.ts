@@ -48,6 +48,14 @@ export async function setupVite(server: Server, app: Express) {
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`,
       );
+      console.log(`[Vite Fallback] req.path: ${req.path}, req.originalUrl: ${req.originalUrl}`);
+      if (req.originalUrl.startsWith("/main-admin")) {
+        console.log(`[Vite Fallback] Replacing manifest.json with manifest-admin.json`);
+        template = template.replace(
+          /href=["']\/manifest\.json["']/,
+          'href="/manifest-admin.json"'
+        );
+      }
       const page = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {

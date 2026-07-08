@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useProducts, useCreateProduct, useDeleteProduct } from "@/hooks/use-products";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Product, InsertProduct, Credential, InsertCredential } from "@shared/schema";
@@ -56,6 +56,24 @@ import {
 } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { GripVertical } from "lucide-react";
 
 function CredentialsDialog({ product }: { product: Product }) {
   const { toast } = useToast();
@@ -206,7 +224,42 @@ export default function ProductsPage() {
   const { data: products, isLoading } = useProducts();
   const [search, setSearch] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [sortedProducts, setSortedProducts] = useState<Product[]>([]);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (products) setSortedProducts(products);
+  }, [products]);
+
+  const reorderMutation = useMutation({
+    mutationFn: async (orderedIds: number[]) => {
+      await apiRequest("POST", "/api/products/reorder", { orderedIds });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.products.list.path] });
+    },
+    onError: () => {
+      toast({ title: "Failed to save order", variant: "destructive" });
+      if (products) setSortedProducts(products);
+    },
+  });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setSortedProducts((prev) => {
+      const oldIndex = prev.findIndex((p) => p.id === active.id);
+      const newIndex = prev.findIndex((p) => p.id === over.id);
+      const newOrder = arrayMove(prev, oldIndex, newIndex);
+      reorderMutation.mutate(newOrder.map((p) => p.id));
+      return newOrder;
+    });
+  }
 
   const [isCustomBroadcastOpen, setIsCustomBroadcastOpen] = useState(false);
 
@@ -226,10 +279,13 @@ export default function ProductsPage() {
     }
   });
 
-  const filteredProducts = products?.filter(p => 
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.type.toLowerCase().includes(search.toLowerCase())
-  ) || [];
+  const filteredProducts = (search
+    ? sortedProducts.filter(
+        (p) =>
+          p.name.toLowerCase().includes(search.toLowerCase()) ||
+          p.type.toLowerCase().includes(search.toLowerCase())
+      )
+    : sortedProducts) || [];
 
   return (
     <div className="space-y-8 animate-in">
@@ -272,10 +328,12 @@ export default function ProductsPage() {
       </div>
 
       <div className="glass-card border-0 rounded-2xl overflow-hidden shadow-2xl bg-white/[0.01] backdrop-blur-3xl">
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <Table>
           <TableHeader>
             <TableRow className="border-white/5 hover:bg-transparent">
-              <TableHead className="text-white/40 font-bold uppercase tracking-widest text-[10px] pl-6 py-4">Product</TableHead>
+              <TableHead className="w-8 pl-4 py-4"></TableHead>
+              <TableHead className="text-white/40 font-bold uppercase tracking-widest text-[10px] pl-2 py-4">Product</TableHead>
               <TableHead className="text-white/40 font-bold uppercase tracking-widest text-[10px] py-4">Category</TableHead>
               <TableHead className="text-white/40 font-bold uppercase tracking-widest text-[10px] py-4">Price</TableHead>
               <TableHead className="text-white/40 font-bold uppercase tracking-widest text-[10px] py-4">Status</TableHead>
@@ -286,7 +344,8 @@ export default function ProductsPage() {
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i} className="border-white/5">
-                  <TableCell className="pl-6 py-4"><Skeleton className="h-10 w-40 bg-white/5 rounded-xl" /></TableCell>
+                  <TableCell className="pl-4 py-4"><Skeleton className="h-5 w-5 bg-white/5 rounded" /></TableCell>
+                  <TableCell className="pl-2 py-4"><Skeleton className="h-10 w-40 bg-white/5 rounded-xl" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-20 bg-white/5 rounded-lg" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-12 bg-white/5 rounded-lg" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-20 bg-white/5 rounded-lg" /></TableCell>
@@ -295,47 +354,72 @@ export default function ProductsPage() {
               ))
             ) : filteredProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-48 text-center text-white/20 font-black text-sm uppercase tracking-tighter">
+                <TableCell colSpan={6} className="h-48 text-center text-white/20 font-black text-sm uppercase tracking-tighter">
                   No products found.
                 </TableCell>
               </TableRow>
             ) : (
-              filteredProducts.map((product) => (
-                <TableRow key={product.id} className="border-white/5 hover:bg-white/[0.03] transition-all duration-300 group">
-                  <TableCell className="pl-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center text-purple-400 group-hover:scale-105 transition-transform duration-300 shadow-md">
-                        <Server className="w-5 h-5" />
-                      </div>
-                      <div className="flex flex-col gap-0">
-                        <span className="text-sm font-black text-white tracking-tight leading-tight">{product.name}</span>
-                        <span className="text-[10px] text-white/30 font-medium truncate max-w-[200px] leading-tight">
-                          {product.description}
-                        </span>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="border-white/10 text-white/60 bg-white/5 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest">
-                      {product.type}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-black text-white text-base tracking-tighter">
-                    {formatProductPrice(product.price, product.currency || 'USD')}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={product.status} />
-                  </TableCell>
-                  <TableCell className="text-right pr-6">
-                    <ProductActions product={product} />
-                  </TableCell>
-                </TableRow>
-              ))
+              <SortableContext items={filteredProducts.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+                {filteredProducts.map((product) => (
+                  <SortableProductRow key={product.id} product={product} />
+                ))}
+              </SortableContext>
             )}
           </TableBody>
         </Table>
+        </DndContext>
       </div>
     </div>
+  );
+}
+
+function SortableProductRow({ product }: { product: Product }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: product.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    background: isDragging ? "rgba(139,92,246,0.08)" : undefined,
+    zIndex: isDragging ? 10 : undefined,
+  };
+  return (
+    <TableRow ref={setNodeRef} style={style} className="border-white/5 hover:bg-white/[0.03] transition-all duration-200 group">
+      <TableCell className="pl-4 py-4 w-8">
+        <button
+          {...attributes}
+          {...listeners}
+          className="text-white/20 hover:text-purple-400 cursor-grab active:cursor-grabbing transition-colors p-1 rounded"
+          title="Drag to reorder"
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
+      </TableCell>
+      <TableCell className="pl-2 py-4">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center text-purple-400 group-hover:scale-105 transition-transform duration-300 shadow-md">
+            <Server className="w-5 h-5" />
+          </div>
+          <div className="flex flex-col gap-0">
+            <span className="text-sm font-black text-white tracking-tight leading-tight">{product.name}</span>
+            <span className="text-[10px] text-white/30 font-medium truncate max-w-[200px] leading-tight">{product.description}</span>
+          </div>
+        </div>
+      </TableCell>
+      <TableCell>
+        <Badge variant="outline" className="border-white/10 text-white/60 bg-white/5 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest">
+          {product.type}
+        </Badge>
+      </TableCell>
+      <TableCell className="font-black text-white text-base tracking-tighter">
+        {formatProductPrice(product.price, product.currency || 'USD')}
+      </TableCell>
+      <TableCell>
+        <StatusBadge status={product.status} />
+      </TableCell>
+      <TableCell className="text-right pr-6">
+        <ProductActions product={product} />
+      </TableCell>
+    </TableRow>
   );
 }
 

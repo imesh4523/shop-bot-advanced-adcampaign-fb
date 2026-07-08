@@ -55,7 +55,7 @@ import {
   type InsertVpnServer
 } from "@shared/schema";
 import { format } from "date-fns";
-import { eq, desc, count, sql, and, or, gt, gte, lte, isNull, isNotNull } from "drizzle-orm";
+import { eq, desc, asc, count, sql, and, or, gt, gte, lte, isNull, isNotNull } from "drizzle-orm";
 
 export interface IStorage {
   // Admin Login
@@ -66,6 +66,7 @@ export interface IStorage {
   // Products
   getProducts(): Promise<Product[]>;
   getAvailableProducts(): Promise<Product[]>;
+  reorderProducts(orderedIds: number[]): Promise<void>;
   getProduct(id: number): Promise<Product | undefined>;
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: number, product: Partial<InsertProduct>): Promise<Product>;
@@ -266,11 +267,19 @@ export class DatabaseStorage implements IStorage {
 
   // Products
   async getProducts(): Promise<Product[]> {
-    return await db.select().from(products).orderBy(desc(products.createdAt));
+    return await db.select().from(products).orderBy(asc(products.sortOrder), desc(products.createdAt));
   }
 
   async getAvailableProducts(): Promise<Product[]> {
-    return await db.select().from(products).where(eq(products.status, "available")).orderBy(desc(products.createdAt));
+    return await db.select().from(products).where(eq(products.status, "available")).orderBy(asc(products.sortOrder), desc(products.createdAt));
+  }
+
+  async reorderProducts(orderedIds: number[]): Promise<void> {
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < orderedIds.length; i++) {
+        await tx.update(products).set({ sortOrder: i }).where(eq(products.id, orderedIds[i]));
+      }
+    });
   }
 
   async getProduct(id: number): Promise<Product | undefined> {

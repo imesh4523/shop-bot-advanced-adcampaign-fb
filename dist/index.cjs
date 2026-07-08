@@ -46396,6 +46396,7 @@ var init_schema2 = __esm({
       // In cents
       currency: text("currency").notNull().default("USD"),
       status: text("status").notNull().default("available"),
+      sortOrder: integer("sort_order").notNull().default(0),
       createdAt: timestamp("created_at").defaultNow()
     });
     credentials = pgTable("credentials", {
@@ -55400,10 +55401,17 @@ var init_storage = __esm({
       }
       // Products
       async getProducts() {
-        return await db.select().from(products).orderBy(desc(products.createdAt));
+        return await db.select().from(products).orderBy(asc(products.sortOrder), desc(products.createdAt));
       }
       async getAvailableProducts() {
-        return await db.select().from(products).where(eq(products.status, "available")).orderBy(desc(products.createdAt));
+        return await db.select().from(products).where(eq(products.status, "available")).orderBy(asc(products.sortOrder), desc(products.createdAt));
+      }
+      async reorderProducts(orderedIds) {
+        await db.transaction(async (tx) => {
+          for (let i = 0; i < orderedIds.length; i++) {
+            await tx.update(products).set({ sortOrder: i }).where(eq(products.id, orderedIds[i]));
+          }
+        });
       }
       async getProduct(id) {
         const [product] = await db.select().from(products).where(eq(products.id, id));
@@ -97461,6 +97469,19 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
   app2.delete(api.products.delete.path, isAuth, async (req, res) => {
     await storage.deleteProduct(Number(req.params.id));
     res.status(204).send();
+  });
+  app2.post("/api/products/reorder", isAuth, async (req, res) => {
+    try {
+      const { orderedIds } = req.body;
+      if (!Array.isArray(orderedIds) || orderedIds.some((id) => typeof id !== "number")) {
+        return res.status(400).json({ message: "orderedIds must be an array of numbers" });
+      }
+      await storage.reorderProducts(orderedIds);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Reorder error:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
   });
   app2.get("/api/products/:productId/credentials", isAuth, async (req, res) => {
     const productId = Number(req.params.productId);

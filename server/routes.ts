@@ -465,7 +465,7 @@ export async function registerRoutes(
       res.json({
         "name": "Shopeefy",
         "short_name": "Shopeefy",
-        "description": "Shopeefy Admin Panel",
+        "description": "Shopeefy User App",
         "start_url": "/",
         "display": "standalone",
         "background_color": "#ffffff",
@@ -2553,6 +2553,20 @@ app.put(api.products.update.path, isAuth, async (req, res) => {
 app.delete(api.products.delete.path, isAuth, async (req, res) => {
   await storage.deleteProduct(Number(req.params.id));
   res.status(204).send();
+});
+
+app.post("/api/products/reorder", isAuth, async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.some((id) => typeof id !== "number")) {
+      return res.status(400).json({ message: "orderedIds must be an array of numbers" });
+    }
+    await storage.reorderProducts(orderedIds);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Reorder error:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
 });
 
 app.get("/api/products/:productId/credentials", isAuth, async (req, res) => {
