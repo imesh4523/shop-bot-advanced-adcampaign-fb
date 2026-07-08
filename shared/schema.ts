@@ -343,3 +343,16 @@ export const insertVpnServerSchema = createInsertSchema(vpnServers).omit({ id: t
 export type VpnServer = typeof vpnServers.$inferSelect;
 export type InsertVpnServer = z.infer<typeof insertVpnServerSchema>;
 
+export const uploadedFiles = pgTable("uploaded_files", {
+  id: serial("id").primaryKey(),
+  filename: text("filename").notNull().unique(),
+  mimeType: text("mime_type").notNull(),
+  data: text("data").notNull(), // Base64 encoded file data
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertUploadedFileSchema = createInsertSchema(uploadedFiles).omit({ id: true, createdAt: true });
+export type UploadedFile = typeof uploadedFiles.$inferSelect;
+export type InsertUploadedFile = z.infer<typeof insertUploadedFileSchema>;
+
+

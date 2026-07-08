@@ -68,6 +68,24 @@ export function useAuth() {
     },
   });
 
+  const googleLoginMutation = useMutation({
+    mutationFn: async (credential: string) => {
+      const response = await fetch("/api/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Google Login failed");
+      }
+      return response.json();
+    },
+    onSuccess: (user) => {
+      queryClient.setQueryData(["/api/auth/user"], user);
+    },
+  });
+
   const logoutMutation = useMutation({
     mutationFn: logout,
     onSuccess: () => {
@@ -82,6 +100,8 @@ export function useAuth() {
     isAuthenticated: !!user,
     login: loginMutation.mutateAsync,
     isLoggingIn: loginMutation.isPending,
+    loginWithGoogle: googleLoginMutation.mutateAsync,
+    isLoggingInGoogle: googleLoginMutation.isPending,
     logout: logoutMutation.mutate,
     isLoggingOut: logoutMutation.isPending,
     verify2FA: verify2FAMutation.mutateAsync,

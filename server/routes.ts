@@ -343,20 +343,11 @@ declare module "express-session" {
 
 const activeSpecialOfferTimers = new Map<number, NodeJS.Timeout>();
 
-const storage_disk = multer.diskStorage({
-  destination: function (req: any, file: any, cb: any) {
-    const uploadPath = path.join(process.cwd(), 'public/uploads');
-    if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath, { recursive: true });
-    }
-    cb(null, uploadPath);
-  },
-  filename: function (req: any, file: any, cb: any) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
+const storage_memory = multer.memoryStorage();
+const upload = multer({ 
+  storage: storage_memory,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
-const upload = multer({ storage: storage_disk });
 
 export async function registerRoutes(
   httpServer: HttpServer,
@@ -987,15 +978,35 @@ export async function registerRoutes(
 
       // Helper function to call Gemini API
       const callGemini = async (key: string) => {
-        const geminiMessages = incomingMessages.map(msg => ({
+        // Map and clean messages for Gemini API validation
+        const mapped = incomingMessages.map(msg => ({
           role: msg.role === "user" ? "user" : "model",
-          parts: [{ text: msg.content || "" }]
-        }));
+          parts: [{ text: msg.content ? msg.content.trim() : "" }]
+        })).filter(msg => msg.parts[0].text.length > 0);
+
+        if (mapped.length === 0) return "";
+
+        // Merge consecutive messages with the same role
+        const merged: typeof mapped = [];
+        for (const msg of mapped) {
+          if (merged.length > 0 && merged[merged.length - 1].role === msg.role) {
+            merged[merged.length - 1].parts[0].text += "\n" + msg.parts[0].text;
+          } else {
+            merged.push(msg);
+          }
+        }
+
+        // Ensure the list starts with a 'user' message
+        while (merged.length > 0 && merged[0].role !== "user") {
+          merged.shift();
+        }
+
+        if (merged.length === 0) return "";
 
         const response = await axios.post(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${key}`,
           {
-            contents: geminiMessages,
+            contents: merged,
             systemInstruction: {
               parts: [{ text: systemPrompt }]
             }
@@ -1102,6 +1113,68 @@ export async function registerRoutes(
     }
   });
 
+  // Middleware that allows either Admin session authentication OR Telegram Mini App auth
+  const verifySupportChatAuth = async (req: Request, res: Response, next: NextFunction) => {
+    if (req.isAuthenticated()) {
+      return next();
+    }
+
+    const initData = req.headers['x-telegram-init-data'] as string;
+    const webUserId = req.headers['x-web-user-id'] as string;
+
+    if (initData) {
+      const token = await storage.getSetting("TELEGRAM_BOT_TOKEN");
+      const botToken = token?.value || process.env.TELEGRAM_BOT_TOKEN;
+      if (!botToken) {
+        return res.status(500).json({ message: "Bot token not configured" });
+      }
+      try {
+        const urlParams = new URLSearchParams(initData);
+        const hash = urlParams.get('hash');
+        urlParams.delete('hash');
+        const sortedParams = Array.from(urlParams.entries())
+          .map(([key, value]) => `${key}=${value}`)
+          .sort()
+          .join('\n');
+        const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+        const calculatedHash = crypto.createHmac('sha256', secretKey).update(sortedParams).digest('hex');
+        if (calculatedHash === hash) {
+          const userData = JSON.parse(urlParams.get('user') || '{}');
+          (req as any).tgUser = userData;
+          return next();
+        }
+      } catch (err) {}
+    } else if (webUserId) {
+      (req as any).tgUser = { id: webUserId, username: "web_guest", first_name: "Web", last_name: "Guest" };
+      return next();
+    }
+
+    return res.status(401).json({ message: "Unauthorized access to support channel" });
+  };
+
+  // Support Chat File Upload Endpoint
+  app.post("/api/support/upload", verifySupportChatAuth, upload.single('file'), async (req: any, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+    try {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      const filename = uniqueSuffix + path.extname(req.file.originalname);
+      const base64Data = req.file.buffer.toString('base64');
+      await storage.saveUploadedFile(filename, req.file.mimetype, base64Data);
+      
+      const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${filename}`;
+      res.json({
+        fileUrl,
+        filename: req.file.originalname,
+        mimeType: req.file.mimetype
+      });
+    } catch (err) {
+      console.error("Support file upload failed:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // Mini App Live Support Endpoints
   app.post("/api/mini/support/request", verifyMiniAppAuth, async (req, res) => {
     try {
@@ -1147,11 +1220,11 @@ export async function registerRoutes(
   app.post("/api/mini/support/send", verifyMiniAppAuth, async (req, res) => {
     try {
       const tgUser = (req as any).tgUser;
-      const { message } = req.body;
+      const { message, attachmentUrl, attachmentType } = req.body;
 
       if (!tgUser.id) return res.status(400).json({ message: "User ID missing" });
-      if (!message || typeof message !== 'string') {
-        return res.status(400).json({ message: "message is required and must be a string" });
+      if (!message && !attachmentUrl) {
+        return res.status(400).json({ message: "message or attachment is required" });
       }
 
       const telegramId = tgUser.id.toString();
@@ -1159,25 +1232,29 @@ export async function registerRoutes(
       const firstName = tgUser.first_name || null;
       const lastName = tgUser.last_name || null;
 
+      const finalMessage = message ? message.trim() : (attachmentType === 'image' ? '📷 Photo Attachment' : '📄 PDF Attachment');
+
       const supportMessage = await storage.saveSupportMessage({
         telegramId,
         username,
         firstName,
         lastName,
-        message: message.trim(),
-        sender: "user"
+        message: finalMessage,
+        sender: "user",
+        attachmentUrl: attachmentUrl || null,
+        attachmentType: attachmentType || null
       });
 
       io.emit("support_message", supportMessage);
       io.emit("admin_notification", {
         title: "New Support Message",
-        description: `@${username || telegramId}: ${message.substring(0, 40)}`,
+        description: `@${username || telegramId}: ${finalMessage.substring(0, 40)}`,
         type: "support"
       });
 
       sendAdminPushNotification(
         "New Support Message",
-        `@${username || telegramId}: ${message.substring(0, 40)}`,
+        `@${username || telegramId}: ${finalMessage.substring(0, 40)}`,
         "/main-admin/support"
       ).catch(err => console.error("[PUSH] Error sending support message push:", err));
 
@@ -2357,6 +2434,53 @@ app.post("/api/login", loginLimiter, async (req, res) => {
   res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName });
 });
 
+app.post("/api/auth/google", loginLimiter, async (req, res) => {
+  const { credential } = req.body;
+  if (!credential) {
+    return res.status(400).json({ message: "Credential token is required" });
+  }
+
+  try {
+    const googleEnabledSetting = await storage.getSetting("GOOGLE_LOGIN_ENABLED");
+    const googleClientIdSetting = await storage.getSetting("GOOGLE_CLIENT_ID");
+
+    if (googleEnabledSetting?.value !== "true" || !googleClientIdSetting?.value) {
+      return res.status(400).json({ message: "Google login is not enabled in settings." });
+    }
+
+    const clientId = googleClientIdSetting.value.trim();
+
+    const response = await axios.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`);
+    const tokenInfo = response.data;
+
+    if (!tokenInfo || tokenInfo.error_description) {
+      return res.status(400).json({ message: tokenInfo.error_description || "Invalid Google ID token" });
+    }
+
+    if (tokenInfo.aud !== clientId) {
+      return res.status(400).json({ message: "Audience mismatch. Unauthorized client ID." });
+    }
+
+    if (!tokenInfo.email_verified || tokenInfo.email_verified === "false" || tokenInfo.email_verified === false) {
+      return res.status(400).json({ message: "Google email is not verified" });
+    }
+
+    const email = tokenInfo.email;
+    console.log(`Google auth login attempt: ${email}`);
+
+    const user = await storage.getUserByEmail(email);
+    if (!user) {
+      return res.status(401).json({ message: "Access denied. Admin account not found with this email." });
+    }
+
+    req.session.userId = user.id;
+    res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName });
+  } catch (err: any) {
+    console.error("Google authentication failed:", err.message);
+    res.status(500).json({ message: "Google authentication failed: " + (err.message || "Unknown error") });
+  }
+});
+
 // Verify 2FA code during login
 app.post("/api/login/verify-2fa", loginLimiter, async (req, res) => {
   const { code } = req.body;
@@ -2867,12 +2991,22 @@ app.post("/api/broadcast/schedule", isAuth, async (req, res) => {
   }
 });
 
-app.post("/api/broadcast/upload", isAuth, upload.single('image'), (req: any, res) => {
+app.post("/api/broadcast/upload", isAuth, upload.single('image'), async (req: any, res) => {
   if (!req.file) {
     return res.status(400).json({ message: "No file uploaded" });
   }
-  const imageUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-  res.json({ imageUrl });
+  try {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const filename = uniqueSuffix + path.extname(req.file.originalname);
+    const base64Data = req.file.buffer.toString('base64');
+    await storage.saveUploadedFile(filename, req.file.mimetype, base64Data);
+    
+    const imageUrl = `${req.protocol}://${req.get('host')}/uploads/${filename}`;
+    res.json({ imageUrl });
+  } catch (err) {
+    console.error("Broadcast image upload failed:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
 });
 
 app.get(api.stats.get.path, isAuth, async (req, res) => {
@@ -3337,7 +3471,26 @@ app.post("/api/aws/refresh", isAuth, async (req, res) => {
   }
 });
 
-app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads')));
+app.get('/uploads/:filename', async (req, res) => {
+  try {
+    const file = await storage.getUploadedFile(req.params.filename);
+    if (!file) {
+      const localPath = path.join(process.cwd(), 'public/uploads', req.params.filename);
+      if (fs.existsSync(localPath)) {
+        return res.sendFile(localPath);
+      }
+      return res.status(404).send('Not found');
+    }
+    const buffer = Buffer.from(file.data, 'base64');
+    res.setHeader('Content-Type', file.mimeType);
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+    res.send(buffer);
+  } catch (err) {
+    console.error("Failed to serve uploaded file:", err);
+    res.status(500).send('Server error');
+  }
+});
+
 app.use('/tutorials', express.static(path.join(process.cwd(), 'public', 'tutorials')));
 
 app.post("/api/broadcast/custom", isAuth, async (req, res) => {
@@ -3505,6 +3658,8 @@ app.post("/api/settings", isAuth, async (req, res) => {
       "CLOUDFLARE_API_TOKEN",
       "TELEGRAM_SUPPORT_BOT_TOKEN",
       "SUPPORT_QUICK_REPLIES",
+      "GOOGLE_CLIENT_ID",
+      "GOOGLE_LOGIN_ENABLED",
       "BANNER_IMAGES",
       "OPENAI_API_KEY",
       "OPENAI_API_BASE",
@@ -3540,12 +3695,22 @@ app.post("/api/settings", isAuth, async (req, res) => {
   }
 });
 
-app.post("/api/settings/upload", isAuth, upload.single('image'), (req: any, res) => {
+app.post("/api/settings/upload", isAuth, upload.single('image'), async (req: any, res) => {
   if (!req.file) {
     return res.status(400).json({ message: "No file uploaded" });
   }
-  const imageUrl = `/uploads/${req.file.filename}`;
-  res.json({ imageUrl });
+  try {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const filename = uniqueSuffix + path.extname(req.file.originalname);
+    const base64Data = req.file.buffer.toString('base64');
+    await storage.saveUploadedFile(filename, req.file.mimetype, base64Data);
+    
+    const imageUrl = `/uploads/${filename}`;
+    res.json({ imageUrl });
+  } catch (err) {
+    console.error("Settings image upload failed:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
 });
 
 // Get unique support chats (grouped threads)
@@ -3571,30 +3736,76 @@ app.get("/api/support/messages/:telegramId", isAuth, async (req, res) => {
   }
 });
 
+// Clear full support chat history
+app.delete("/api/support/chats/:telegramId", isAuth, async (req, res) => {
+  try {
+    const { telegramId } = req.params;
+    await db.delete(supportMessages).where(eq(supportMessages.telegramId, telegramId));
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Failed to clear chat:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// Clear only media files from support chat
+app.delete("/api/support/chats/:telegramId/media", isAuth, async (req, res) => {
+  try {
+    const { telegramId } = req.params;
+    await db.delete(supportMessages).where(
+      and(
+        eq(supportMessages.telegramId, telegramId),
+        sql`${supportMessages.attachmentUrl} IS NOT NULL`
+      )
+    );
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Failed to clear media:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 // Reply to a user via the support bot
 app.post("/api/support/reply", isAuth, async (req, res) => {
   try {
-    const { telegramId, message } = req.body;
-    if (!telegramId || !message) {
-      return res.status(400).json({ message: "telegramId and message are required" });
+    const { telegramId, message, attachmentUrl, attachmentType } = req.body;
+    if (!telegramId || (!message && !attachmentUrl)) {
+      return res.status(400).json({ message: "telegramId and message or attachment are required" });
     }
+
+    const finalMessage = message ? message.trim() : (attachmentType === 'image' ? '📷 Photo Attachment' : '📄 PDF Attachment');
 
     // Send message to user via Telegram if it's a real Telegram user
     if (!telegramId.startsWith("web_")) {
       if (!supportBot) {
         return res.status(400).json({ message: "Support bot is not running. Please make sure the support bot token is configured in Settings." });
       }
-      await supportBot.sendMessage(telegramId, message);
+      if (attachmentUrl) {
+        // Resolve absolute url for Telegram bot if it is a relative upload
+        const absoluteUrl = attachmentUrl.startsWith("http") 
+          ? attachmentUrl 
+          : `${req.protocol}://${req.get('host')}${attachmentUrl}`;
+
+        if (attachmentType === "image") {
+          await supportBot.sendPhoto(telegramId, absoluteUrl, { caption: message || "" });
+        } else {
+          await supportBot.sendDocument(telegramId, absoluteUrl, { caption: message || "" });
+        }
+      } else {
+        await supportBot.sendMessage(telegramId, finalMessage);
+      }
     }
 
     // Save to database as admin sender
     const supportMessage = await storage.saveSupportMessage({
       telegramId,
-      message,
+      message: finalMessage,
       sender: "admin",
       username: "Admin",
       firstName: "Admin",
-      lastName: ""
+      lastName: "",
+      attachmentUrl: attachmentUrl || null,
+      attachmentType: attachmentType || null
     });
 
     // Emit event via socket.io
@@ -3621,7 +3832,9 @@ const PUBLIC_SETTINGS_KEYS = [
   "PAYMENT_APTOS_ENABLED",
   "MIN_DEPOSIT_LIMIT",
   "BANNER_IMAGES",
-  "THEME_COLOR"
+  "THEME_COLOR",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_LOGIN_ENABLED"
 ];
 
 app.get("/api/settings/:key", async (req, res, next) => {
@@ -3809,6 +4022,29 @@ const initBot = async () => {
   }
 };
 
+const getMimeTypeByExtension = (filePath: string): string => {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === '.png') return 'image/png';
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+  if (ext === '.gif') return 'image/gif';
+  if (ext === '.svg') return 'image/svg+xml';
+  if (ext === '.webp') return 'image/webp';
+  if (ext === '.mp4') return 'video/mp4';
+  if (ext === '.webm') return 'video/webm';
+  if (ext === '.pdf') return 'application/pdf';
+  return 'application/octet-stream';
+};
+
+const downloadTelegramFile = async (botToken: string, filePath: string): Promise<string> => {
+  const url = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+  const response = await axios.get(url, { responseType: 'arraybuffer' });
+  const filename = Date.now() + '-' + path.basename(filePath);
+  const mimeType = getMimeTypeByExtension(filePath);
+  const base64Data = Buffer.from(response.data).toString('base64');
+  await storage.saveUploadedFile(filename, mimeType, base64Data);
+  return `/uploads/${filename}`;
+};
+
 let supportBot: TelegramBot | null = null;
 
 const initSupportBot = async () => {
@@ -3840,15 +4076,46 @@ const initSupportBot = async () => {
         const username = msg.chat.username || null;
         const firstName = msg.chat.first_name || null;
         const lastName = msg.chat.last_name || null;
-        const text = msg.text || "";
-
-        if (!text) return; // skip non-text messages for now
+        
+        let text = msg.text || msg.caption || "";
+        let attachmentUrl: string | null = null;
+        let attachmentType: string | null = null;
 
         // Check if user is typing /start
-        if (text.startsWith("/start")) {
+        if (text && text.startsWith("/start")) {
           await supportBot?.sendMessage(telegramId, "Hello! Welcome to our Live Support. Write your message here, and our administrator will reply to you shortly.");
           return;
         }
+
+        // Handle Photo Attachments
+        if (msg.photo && msg.photo.length > 0) {
+          const photo = msg.photo[msg.photo.length - 1];
+          try {
+            const file = await supportBot.getFile(photo.file_id);
+            if (file.file_path) {
+              attachmentUrl = await downloadTelegramFile(supportToken, file.file_path);
+              attachmentType = "image";
+              if (!text) text = "📷 Photo Attachment";
+            }
+          } catch (err) {
+            console.error("Failed to download telegram photo:", err);
+          }
+        }
+        // Handle Document Attachments (PDFs or others)
+        else if (msg.document) {
+          try {
+            const file = await supportBot.getFile(msg.document.file_id);
+            if (file.file_path) {
+              attachmentUrl = await downloadTelegramFile(supportToken, file.file_path);
+              attachmentType = msg.document.mime_type?.startsWith("image/") ? "image" : "pdf";
+              if (!text) text = `📄 Document: ${msg.document.file_name || "Attachment"}`;
+            }
+          } catch (err) {
+            console.error("Failed to download telegram document:", err);
+          }
+        }
+
+        if (!text && !attachmentUrl) return; // skip empty messages
 
         // Save message in database
         const supportMessage = await storage.saveSupportMessage({
@@ -3857,7 +4124,9 @@ const initSupportBot = async () => {
           firstName,
           lastName,
           message: text,
-          sender: "user"
+          sender: "user",
+          attachmentUrl,
+          attachmentType
         });
 
         // Emit Socket.io events

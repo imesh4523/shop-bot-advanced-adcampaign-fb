@@ -30449,12 +30449,12 @@ var require_file_appender = __commonJS({
 // node_modules/multer/lib/remove-uploaded-files.js
 var require_remove_uploaded_files = __commonJS({
   "node_modules/multer/lib/remove-uploaded-files.js"(exports2, module2) {
-    function removeUploadedFiles(uploadedFiles, remove, cb) {
-      var length = uploadedFiles.length;
+    function removeUploadedFiles(uploadedFiles2, remove, cb) {
+      var length = uploadedFiles2.length;
       var errors = [];
       if (length === 0) return cb(null, errors);
       function handleFile(idx) {
-        var file = uploadedFiles[idx];
+        var file = uploadedFiles2[idx];
         remove(file, function(err) {
           if (err) {
             err.file = file;
@@ -30515,7 +30515,7 @@ var require_make_middleware = __commonJS({
         var readFinished = false;
         var errorOccured = false;
         var pendingWrites = new Counter();
-        var uploadedFiles = [];
+        var uploadedFiles2 = [];
         function done(err) {
           if (isDone) return;
           isDone = true;
@@ -30537,7 +30537,7 @@ var require_make_middleware = __commonJS({
             function remove(file, cb) {
               storage2._removeFile(req, file, cb);
             }
-            removeUploadedFiles(uploadedFiles, remove, function(err, storageErrors) {
+            removeUploadedFiles(uploadedFiles2, remove, function(err, storageErrors) {
               if (err) return done(err);
               uploadError.storageErrors = storageErrors;
               done(uploadError);
@@ -30600,7 +30600,7 @@ var require_make_middleware = __commonJS({
             storage2._handleFile(req, file, function(err2, info) {
               if (aborting) {
                 appender.removePlaceholder(placeholder);
-                uploadedFiles.push(extend2(file, info));
+                uploadedFiles2.push(extend2(file, info));
                 return pendingWrites.decrement();
               }
               if (err2) {
@@ -30610,7 +30610,7 @@ var require_make_middleware = __commonJS({
               }
               var fileInfo = extend2(file, info);
               appender.replacePlaceholder(placeholder, fileInfo);
-              uploadedFiles.push(fileInfo);
+              uploadedFiles2.push(fileInfo);
               pendingWrites.decrement();
               indicateDone();
             });
@@ -46346,6 +46346,7 @@ __export(schema_exports, {
   insertSupportMessageSchema: () => insertSupportMessageSchema,
   insertTelegramUserSchema: () => insertTelegramUserSchema,
   insertTrafficLogSchema: () => insertTrafficLogSchema,
+  insertUploadedFileSchema: () => insertUploadedFileSchema,
   insertUserSchema: () => insertUserSchema,
   insertVpnServerSchema: () => insertVpnServerSchema,
   orders: () => orders,
@@ -46360,14 +46361,15 @@ __export(schema_exports, {
   settings: () => settings,
   specialOffers: () => specialOffers2,
   specialOffersRelations: () => specialOffersRelations,
-  supportMessages: () => supportMessages,
+  supportMessages: () => supportMessages2,
   telegramUsers: () => telegramUsers,
   telegramUsersRelations: () => telegramUsersRelations,
   trafficLogs: () => trafficLogs,
+  uploadedFiles: () => uploadedFiles,
   users: () => users2,
   vpnServers: () => vpnServers
 });
-var users2, insertUserSchema, products, credentials, telegramUsers, settings, payments, productsRelations, credentialsRelations, telegramUsersRelations, orders, ordersRelations, paymentsRelations, insertProductSchema, insertCredentialSchema, insertOrderSchema, insertTelegramUserSchema, insertPaymentSchema, broadcastChannels, broadcastMessages, insertBroadcastChannelSchema, insertBroadcastMessageSchema, pushSubscriptions, pushSubscriptionsRelations, insertPushSubscriptionSchema, awsAccounts, awsActivities, awsAccountsRelations, awsActivitiesRelations, insertAwsAccountSchema, insertAwsActivitySchema, specialOffers2, specialOffersRelations, insertSpecialOfferSchema, backupConfigs, backupLogs, insertBackupConfigSchema, insertBackupLogSchema, trafficLogs, insertTrafficLogSchema, supportMessages, insertSupportMessageSchema, checkedIps, insertCheckedIpSchema, vpnServers, insertVpnServerSchema;
+var users2, insertUserSchema, products, credentials, telegramUsers, settings, payments, productsRelations, credentialsRelations, telegramUsersRelations, orders, ordersRelations, paymentsRelations, insertProductSchema, insertCredentialSchema, insertOrderSchema, insertTelegramUserSchema, insertPaymentSchema, broadcastChannels, broadcastMessages, insertBroadcastChannelSchema, insertBroadcastMessageSchema, pushSubscriptions, pushSubscriptionsRelations, insertPushSubscriptionSchema, awsAccounts, awsActivities, awsAccountsRelations, awsActivitiesRelations, insertAwsAccountSchema, insertAwsActivitySchema, specialOffers2, specialOffersRelations, insertSpecialOfferSchema, backupConfigs, backupLogs, insertBackupConfigSchema, insertBackupLogSchema, trafficLogs, insertTrafficLogSchema, supportMessages2, insertSupportMessageSchema, checkedIps, insertCheckedIpSchema, vpnServers, insertVpnServerSchema, uploadedFiles, insertUploadedFileSchema;
 var init_schema2 = __esm({
   "shared/schema.ts"() {
     "use strict";
@@ -46612,7 +46614,7 @@ var init_schema2 = __esm({
       createdAt: timestamp("created_at").defaultNow()
     });
     insertTrafficLogSchema = createInsertSchema(trafficLogs).omit({ id: true, createdAt: true });
-    supportMessages = pgTable("support_messages", {
+    supportMessages2 = pgTable("support_messages", {
       id: serial("id").primaryKey(),
       telegramId: text("telegram_id").notNull(),
       username: text("username"),
@@ -46621,9 +46623,11 @@ var init_schema2 = __esm({
       message: text("message").notNull(),
       sender: text("sender").notNull(),
       // 'user' or 'admin'
+      attachmentUrl: text("attachment_url"),
+      attachmentType: text("attachment_type"),
       createdAt: timestamp("created_at").defaultNow()
     });
-    insertSupportMessageSchema = createInsertSchema(supportMessages).omit({ id: true, createdAt: true });
+    insertSupportMessageSchema = createInsertSchema(supportMessages2).omit({ id: true, createdAt: true });
     checkedIps = pgTable("checked_ips", {
       id: serial("id").primaryKey(),
       ip: text("ip").notNull().unique(),
@@ -46644,6 +46648,15 @@ var init_schema2 = __esm({
       createdAt: timestamp("created_at").defaultNow()
     });
     insertVpnServerSchema = createInsertSchema(vpnServers).omit({ id: true, createdAt: true });
+    uploadedFiles = pgTable("uploaded_files", {
+      id: serial("id").primaryKey(),
+      filename: text("filename").notNull().unique(),
+      mimeType: text("mime_type").notNull(),
+      data: text("data").notNull(),
+      // Base64 encoded file data
+      createdAt: timestamp("created_at").defaultNow()
+    });
+    insertUploadedFileSchema = createInsertSchema(uploadedFiles).omit({ id: true, createdAt: true });
   }
 });
 
@@ -55795,18 +55808,18 @@ var init_storage = __esm({
       }
       // Support Messages Implementation
       async saveSupportMessage(msg) {
-        const [newMessage] = await db.insert(supportMessages).values(msg).returning();
+        const [newMessage] = await db.insert(supportMessages2).values(msg).returning();
         return newMessage;
       }
       async getSupportMessages(telegramId) {
-        const query = db.select().from(supportMessages);
+        const query = db.select().from(supportMessages2);
         if (telegramId) {
-          query.where(eq(supportMessages.telegramId, telegramId));
+          query.where(eq(supportMessages2.telegramId, telegramId));
         }
-        return await query.orderBy(supportMessages.createdAt);
+        return await query.orderBy(supportMessages2.createdAt);
       }
       async getSupportChats() {
-        const messages = await db.select().from(supportMessages).orderBy(desc(supportMessages.createdAt));
+        const messages = await db.select().from(supportMessages2).orderBy(desc(supportMessages2.createdAt));
         const chatsMap = /* @__PURE__ */ new Map();
         for (const m of messages) {
           if (!chatsMap.has(m.telegramId)) {
@@ -55872,6 +55885,18 @@ var init_storage = __esm({
       }
       async deleteVpnServer(id) {
         await db.delete(vpnServers).where(eq(vpnServers.id, id));
+      }
+      // Uploaded Files
+      async getUploadedFile(filename) {
+        const [file] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.filename, filename));
+        return file;
+      }
+      async saveUploadedFile(filename, mimeType, data) {
+        const [newFile] = await db.insert(uploadedFiles).values({ filename, mimeType, data }).onConflictDoUpdate({
+          target: uploadedFiles.filename,
+          set: { mimeType, data, createdAt: /* @__PURE__ */ new Date() }
+        }).returning();
+        return newFile;
       }
     };
     storage = new DatabaseStorage();
@@ -95667,20 +95692,12 @@ async function verifyAptosTransaction(txId, walletAddress) {
   }
 }
 var activeSpecialOfferTimers = /* @__PURE__ */ new Map();
-var storage_disk = import_multer.default.diskStorage({
-  destination: function(req, file, cb) {
-    const uploadPath = import_path2.default.join(process.cwd(), "public/uploads");
-    if (!import_fs2.default.existsSync(uploadPath)) {
-      import_fs2.default.mkdirSync(uploadPath, { recursive: true });
-    }
-    cb(null, uploadPath);
-  },
-  filename: function(req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + import_path2.default.extname(file.originalname));
-  }
+var storage_memory = import_multer.default.memoryStorage();
+var upload = (0, import_multer.default)({
+  storage: storage_memory,
+  limits: { fileSize: 10 * 1024 * 1024 }
+  // 10MB limit
 });
-var upload = (0, import_multer.default)({ storage: storage_disk });
 async function registerRoutes(httpServer2, app2, io2) {
   app2.use((0, import_helmet.default)({
     contentSecurityPolicy: false,
@@ -95774,7 +95791,7 @@ async function registerRoutes(httpServer2, app2, io2) {
       res.json({
         "name": "Shopeefy",
         "short_name": "Shopeefy",
-        "description": "Shopeefy Admin Panel",
+        "description": "Shopeefy User App",
         "start_url": "/",
         "display": "standalone",
         "background_color": "#ffffff",
@@ -96205,14 +96222,27 @@ ${extraInstructions}
       systemPrompt += `3. Maintain developer credit recognition if asked: Developer credits belong to Rochana Imesh.
 `;
       const callGemini = async (key) => {
-        const geminiMessages = incomingMessages.map((msg) => ({
+        const mapped = incomingMessages.map((msg) => ({
           role: msg.role === "user" ? "user" : "model",
-          parts: [{ text: msg.content || "" }]
-        }));
+          parts: [{ text: msg.content ? msg.content.trim() : "" }]
+        })).filter((msg) => msg.parts[0].text.length > 0);
+        if (mapped.length === 0) return "";
+        const merged = [];
+        for (const msg of mapped) {
+          if (merged.length > 0 && merged[merged.length - 1].role === msg.role) {
+            merged[merged.length - 1].parts[0].text += "\n" + msg.parts[0].text;
+          } else {
+            merged.push(msg);
+          }
+        }
+        while (merged.length > 0 && merged[0].role !== "user") {
+          merged.shift();
+        }
+        if (merged.length === 0) return "";
         const response = await axios_default.post(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${key}`,
           {
-            contents: geminiMessages,
+            contents: merged,
             systemInstruction: {
               parts: [{ text: systemPrompt }]
             }
@@ -96309,6 +96339,58 @@ ${extraInstructions}
       res.json({ answer: "\u26A0\uFE0F Live support assistant is temporarily unavailable. Please make sure the AI settings are configured correctly." });
     }
   });
+  const verifySupportChatAuth = async (req, res, next) => {
+    if (req.isAuthenticated()) {
+      return next();
+    }
+    const initData = req.headers["x-telegram-init-data"];
+    const webUserId = req.headers["x-web-user-id"];
+    if (initData) {
+      const token = await storage.getSetting("TELEGRAM_BOT_TOKEN");
+      const botToken = token?.value || process.env.TELEGRAM_BOT_TOKEN;
+      if (!botToken) {
+        return res.status(500).json({ message: "Bot token not configured" });
+      }
+      try {
+        const urlParams = new URLSearchParams(initData);
+        const hash = urlParams.get("hash");
+        urlParams.delete("hash");
+        const sortedParams = Array.from(urlParams.entries()).map(([key, value]) => `${key}=${value}`).sort().join("\n");
+        const secretKey = import_crypto2.default.createHmac("sha256", "WebAppData").update(botToken).digest();
+        const calculatedHash = import_crypto2.default.createHmac("sha256", secretKey).update(sortedParams).digest("hex");
+        if (calculatedHash === hash) {
+          const userData = JSON.parse(urlParams.get("user") || "{}");
+          req.tgUser = userData;
+          return next();
+        }
+      } catch (err) {
+      }
+    } else if (webUserId) {
+      req.tgUser = { id: webUserId, username: "web_guest", first_name: "Web", last_name: "Guest" };
+      return next();
+    }
+    return res.status(401).json({ message: "Unauthorized access to support channel" });
+  };
+  app2.post("/api/support/upload", verifySupportChatAuth, upload.single("file"), async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+    try {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      const filename = uniqueSuffix + import_path2.default.extname(req.file.originalname);
+      const base64Data = req.file.buffer.toString("base64");
+      await storage.saveUploadedFile(filename, req.file.mimetype, base64Data);
+      const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${filename}`;
+      res.json({
+        fileUrl,
+        filename: req.file.originalname,
+        mimeType: req.file.mimetype
+      });
+    } catch (err) {
+      console.error("Support file upload failed:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
   app2.post("/api/mini/support/request", verifyMiniAppAuth, async (req, res) => {
     try {
       const tgUser = req.tgUser;
@@ -96346,32 +96428,35 @@ ${extraInstructions}
   app2.post("/api/mini/support/send", verifyMiniAppAuth, async (req, res) => {
     try {
       const tgUser = req.tgUser;
-      const { message: message2 } = req.body;
+      const { message: message2, attachmentUrl, attachmentType } = req.body;
       if (!tgUser.id) return res.status(400).json({ message: "User ID missing" });
-      if (!message2 || typeof message2 !== "string") {
-        return res.status(400).json({ message: "message is required and must be a string" });
+      if (!message2 && !attachmentUrl) {
+        return res.status(400).json({ message: "message or attachment is required" });
       }
       const telegramId = tgUser.id.toString();
       const username = tgUser.username || null;
       const firstName = tgUser.first_name || null;
       const lastName = tgUser.last_name || null;
+      const finalMessage = message2 ? message2.trim() : attachmentType === "image" ? "\u{1F4F7} Photo Attachment" : "\u{1F4C4} PDF Attachment";
       const supportMessage = await storage.saveSupportMessage({
         telegramId,
         username,
         firstName,
         lastName,
-        message: message2.trim(),
-        sender: "user"
+        message: finalMessage,
+        sender: "user",
+        attachmentUrl: attachmentUrl || null,
+        attachmentType: attachmentType || null
       });
       io2.emit("support_message", supportMessage);
       io2.emit("admin_notification", {
         title: "New Support Message",
-        description: `@${username || telegramId}: ${message2.substring(0, 40)}`,
+        description: `@${username || telegramId}: ${finalMessage.substring(0, 40)}`,
         type: "support"
       });
       sendAdminPushNotification(
         "New Support Message",
-        `@${username || telegramId}: ${message2.substring(0, 40)}`,
+        `@${username || telegramId}: ${finalMessage.substring(0, 40)}`,
         "/main-admin/support"
       ).catch((err) => console.error("[PUSH] Error sending support message push:", err));
       res.json({ success: true, message: supportMessage });
@@ -97318,6 +97403,42 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
     req.session.userId = user.id;
     res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName });
   });
+  app2.post("/api/auth/google", loginLimiter, async (req, res) => {
+    const { credential } = req.body;
+    if (!credential) {
+      return res.status(400).json({ message: "Credential token is required" });
+    }
+    try {
+      const googleEnabledSetting = await storage.getSetting("GOOGLE_LOGIN_ENABLED");
+      const googleClientIdSetting = await storage.getSetting("GOOGLE_CLIENT_ID");
+      if (googleEnabledSetting?.value !== "true" || !googleClientIdSetting?.value) {
+        return res.status(400).json({ message: "Google login is not enabled in settings." });
+      }
+      const clientId = googleClientIdSetting.value.trim();
+      const response = await axios_default.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`);
+      const tokenInfo = response.data;
+      if (!tokenInfo || tokenInfo.error_description) {
+        return res.status(400).json({ message: tokenInfo.error_description || "Invalid Google ID token" });
+      }
+      if (tokenInfo.aud !== clientId) {
+        return res.status(400).json({ message: "Audience mismatch. Unauthorized client ID." });
+      }
+      if (!tokenInfo.email_verified || tokenInfo.email_verified === "false" || tokenInfo.email_verified === false) {
+        return res.status(400).json({ message: "Google email is not verified" });
+      }
+      const email = tokenInfo.email;
+      console.log(`Google auth login attempt: ${email}`);
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(401).json({ message: "Access denied. Admin account not found with this email." });
+      }
+      req.session.userId = user.id;
+      res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName });
+    } catch (err) {
+      console.error("Google authentication failed:", err.message);
+      res.status(500).json({ message: "Google authentication failed: " + (err.message || "Unknown error") });
+    }
+  });
   app2.post("/api/login/verify-2fa", loginLimiter, async (req, res) => {
     const { code } = req.body;
     const tempUserId = req.session.tempUserId;
@@ -97735,12 +97856,21 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
       res.status(400).json({ message: "Invalid input" });
     }
   });
-  app2.post("/api/broadcast/upload", isAuth, upload.single("image"), (req, res) => {
+  app2.post("/api/broadcast/upload", isAuth, upload.single("image"), async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
-    const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
-    res.json({ imageUrl });
+    try {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      const filename = uniqueSuffix + import_path2.default.extname(req.file.originalname);
+      const base64Data = req.file.buffer.toString("base64");
+      await storage.saveUploadedFile(filename, req.file.mimetype, base64Data);
+      const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${filename}`;
+      res.json({ imageUrl });
+    } catch (err) {
+      console.error("Broadcast image upload failed:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
   });
   app2.get(api.stats.get.path, isAuth, async (req, res) => {
     try {
@@ -98152,7 +98282,25 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
       res.status(500).json({ message: "Internal server error" });
     }
   });
-  app2.use("/uploads", import_express.default.static(import_path2.default.join(process.cwd(), "public/uploads")));
+  app2.get("/uploads/:filename", async (req, res) => {
+    try {
+      const file = await storage.getUploadedFile(req.params.filename);
+      if (!file) {
+        const localPath = import_path2.default.join(process.cwd(), "public/uploads", req.params.filename);
+        if (import_fs2.default.existsSync(localPath)) {
+          return res.sendFile(localPath);
+        }
+        return res.status(404).send("Not found");
+      }
+      const buffer = Buffer.from(file.data, "base64");
+      res.setHeader("Content-Type", file.mimeType);
+      res.setHeader("Cache-Control", "public, max-age=31536000");
+      res.send(buffer);
+    } catch (err) {
+      console.error("Failed to serve uploaded file:", err);
+      res.status(500).send("Server error");
+    }
+  });
   app2.use("/tutorials", import_express.default.static(import_path2.default.join(process.cwd(), "public", "tutorials")));
   app2.post("/api/broadcast/custom", isAuth, async (req, res) => {
     try {
@@ -98305,6 +98453,8 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
         "CLOUDFLARE_API_TOKEN",
         "TELEGRAM_SUPPORT_BOT_TOKEN",
         "SUPPORT_QUICK_REPLIES",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_LOGIN_ENABLED",
         "BANNER_IMAGES",
         "OPENAI_API_KEY",
         "OPENAI_API_BASE",
@@ -98334,12 +98484,21 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
       res.status(500).json({ message: "Internal server error" });
     }
   });
-  app2.post("/api/settings/upload", isAuth, upload.single("image"), (req, res) => {
+  app2.post("/api/settings/upload", isAuth, upload.single("image"), async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
-    const imageUrl = `/uploads/${req.file.filename}`;
-    res.json({ imageUrl });
+    try {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      const filename = uniqueSuffix + import_path2.default.extname(req.file.originalname);
+      const base64Data = req.file.buffer.toString("base64");
+      await storage.saveUploadedFile(filename, req.file.mimetype, base64Data);
+      const imageUrl = `/uploads/${filename}`;
+      res.json({ imageUrl });
+    } catch (err) {
+      console.error("Settings image upload failed:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
   });
   app2.get("/api/support/chats", isAuth, async (req, res) => {
     try {
@@ -98360,25 +98519,62 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
       res.status(500).json({ message: "Internal server error" });
     }
   });
+  app2.delete("/api/support/chats/:telegramId", isAuth, async (req, res) => {
+    try {
+      const { telegramId } = req.params;
+      await db.delete(supportMessages).where(eq(supportMessages.telegramId, telegramId));
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Failed to clear chat:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+  app2.delete("/api/support/chats/:telegramId/media", isAuth, async (req, res) => {
+    try {
+      const { telegramId } = req.params;
+      await db.delete(supportMessages).where(
+        and(
+          eq(supportMessages.telegramId, telegramId),
+          sql`${supportMessages.attachmentUrl} IS NOT NULL`
+        )
+      );
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Failed to clear media:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
   app2.post("/api/support/reply", isAuth, async (req, res) => {
     try {
-      const { telegramId, message: message2 } = req.body;
-      if (!telegramId || !message2) {
-        return res.status(400).json({ message: "telegramId and message are required" });
+      const { telegramId, message: message2, attachmentUrl, attachmentType } = req.body;
+      if (!telegramId || !message2 && !attachmentUrl) {
+        return res.status(400).json({ message: "telegramId and message or attachment are required" });
       }
+      const finalMessage = message2 ? message2.trim() : attachmentType === "image" ? "\u{1F4F7} Photo Attachment" : "\u{1F4C4} PDF Attachment";
       if (!telegramId.startsWith("web_")) {
         if (!supportBot) {
           return res.status(400).json({ message: "Support bot is not running. Please make sure the support bot token is configured in Settings." });
         }
-        await supportBot.sendMessage(telegramId, message2);
+        if (attachmentUrl) {
+          const absoluteUrl = attachmentUrl.startsWith("http") ? attachmentUrl : `${req.protocol}://${req.get("host")}${attachmentUrl}`;
+          if (attachmentType === "image") {
+            await supportBot.sendPhoto(telegramId, absoluteUrl, { caption: message2 || "" });
+          } else {
+            await supportBot.sendDocument(telegramId, absoluteUrl, { caption: message2 || "" });
+          }
+        } else {
+          await supportBot.sendMessage(telegramId, finalMessage);
+        }
       }
       const supportMessage = await storage.saveSupportMessage({
         telegramId,
-        message: message2,
+        message: finalMessage,
         sender: "admin",
         username: "Admin",
         firstName: "Admin",
-        lastName: ""
+        lastName: "",
+        attachmentUrl: attachmentUrl || null,
+        attachmentType: attachmentType || null
       });
       io2.emit("support_message", supportMessage);
       res.json({ success: true, message: supportMessage });
@@ -98401,7 +98597,9 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
     "PAYMENT_APTOS_ENABLED",
     "MIN_DEPOSIT_LIMIT",
     "BANNER_IMAGES",
-    "THEME_COLOR"
+    "THEME_COLOR",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_LOGIN_ENABLED"
   ];
   app2.get("/api/settings/:key", async (req, res, next) => {
     const { key } = req.params;
@@ -98564,6 +98762,27 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
       console.error("Telegram bot init failed:", err);
     }
   };
+  const getMimeTypeByExtension = (filePath) => {
+    const ext = import_path2.default.extname(filePath).toLowerCase();
+    if (ext === ".png") return "image/png";
+    if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+    if (ext === ".gif") return "image/gif";
+    if (ext === ".svg") return "image/svg+xml";
+    if (ext === ".webp") return "image/webp";
+    if (ext === ".mp4") return "video/mp4";
+    if (ext === ".webm") return "video/webm";
+    if (ext === ".pdf") return "application/pdf";
+    return "application/octet-stream";
+  };
+  const downloadTelegramFile = async (botToken, filePath) => {
+    const url2 = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+    const response = await axios_default.get(url2, { responseType: "arraybuffer" });
+    const filename = Date.now() + "-" + import_path2.default.basename(filePath);
+    const mimeType = getMimeTypeByExtension(filePath);
+    const base64Data = Buffer.from(response.data).toString("base64");
+    await storage.saveUploadedFile(filename, mimeType, base64Data);
+    return `/uploads/${filename}`;
+  };
   let supportBot = null;
   const initSupportBot = async () => {
     try {
@@ -98590,19 +98809,47 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
           const username = msg.chat.username || null;
           const firstName = msg.chat.first_name || null;
           const lastName = msg.chat.last_name || null;
-          const text2 = msg.text || "";
-          if (!text2) return;
-          if (text2.startsWith("/start")) {
+          let text2 = msg.text || msg.caption || "";
+          let attachmentUrl = null;
+          let attachmentType = null;
+          if (text2 && text2.startsWith("/start")) {
             await supportBot?.sendMessage(telegramId, "Hello! Welcome to our Live Support. Write your message here, and our administrator will reply to you shortly.");
             return;
           }
+          if (msg.photo && msg.photo.length > 0) {
+            const photo = msg.photo[msg.photo.length - 1];
+            try {
+              const file = await supportBot.getFile(photo.file_id);
+              if (file.file_path) {
+                attachmentUrl = await downloadTelegramFile(supportToken, file.file_path);
+                attachmentType = "image";
+                if (!text2) text2 = "\u{1F4F7} Photo Attachment";
+              }
+            } catch (err) {
+              console.error("Failed to download telegram photo:", err);
+            }
+          } else if (msg.document) {
+            try {
+              const file = await supportBot.getFile(msg.document.file_id);
+              if (file.file_path) {
+                attachmentUrl = await downloadTelegramFile(supportToken, file.file_path);
+                attachmentType = msg.document.mime_type?.startsWith("image/") ? "image" : "pdf";
+                if (!text2) text2 = `\u{1F4C4} Document: ${msg.document.file_name || "Attachment"}`;
+              }
+            } catch (err) {
+              console.error("Failed to download telegram document:", err);
+            }
+          }
+          if (!text2 && !attachmentUrl) return;
           const supportMessage = await storage.saveSupportMessage({
             telegramId,
             username,
             firstName,
             lastName,
             message: text2,
-            sender: "user"
+            sender: "user",
+            attachmentUrl,
+            attachmentType
           });
           io2.emit("support_message", supportMessage);
           io2.emit("admin_notification", {
@@ -102637,8 +102884,20 @@ function serveStatic(app2) {
     );
   }
   app2.use(import_express2.default.static(distPath));
-  app2.use("*", (_req, res) => {
-    res.sendFile(import_path3.default.resolve(distPath, "index.html"));
+  app2.use("*", async (req, res) => {
+    const indexPath = import_path3.default.resolve(distPath, "index.html");
+    try {
+      let html = await import_fs3.default.promises.readFile(indexPath, "utf-8");
+      if (req.originalUrl.startsWith("/main-admin")) {
+        html = html.replace(
+          /href=["']\/manifest\.json["']/,
+          'href="/manifest-admin.json"'
+        );
+      }
+      res.status(200).set({ "Content-Type": "text/html" }).send(html);
+    } catch (err) {
+      res.sendFile(indexPath);
+    }
   });
 }
 

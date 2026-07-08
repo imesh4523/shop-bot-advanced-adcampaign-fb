@@ -27,7 +27,9 @@ import {
   Minimize2,
   Copy,
   PlayCircle,
-  Database
+  Database,
+  Paperclip,
+  FileText
 } from "lucide-react";
 
 import { format } from "date-fns";
@@ -628,6 +630,55 @@ export default function MiniAppShop() {
   const [liveMessages, setLiveMessages] = useState<SupportMessage[]>([]);
   const [isLiveLoading, setIsLiveLoading] = useState(false);
   const [isRequestingHuman, setIsRequestingHuman] = useState(false);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [uploadedAttachment, setUploadedAttachment] = useState<{ url: string; type: 'image' | 'pdf'; name: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingFile(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const initData = getTelegramInitData();
+      const webUserId = localStorage.getItem("web_user_id") || "";
+
+      const res = await fetch("/api/support/upload", {
+        method: "POST",
+        headers: {
+          'x-telegram-init-data': initData,
+          'x-web-user-id': webUserId
+        },
+        body: formData
+      });
+
+      if (!res.ok) {
+        throw new Error("Upload failed");
+      }
+
+      const data = await res.json();
+      setUploadedAttachment({
+        url: data.fileUrl,
+        type: file.type.startsWith("image/") ? "image" : "pdf",
+        name: file.name
+      });
+      toast({
+        title: "File Uploaded",
+        description: `${file.name} uploaded successfully.`
+      });
+    } catch (err: any) {
+      toast({
+        title: "Upload Failed",
+        description: err.message || "Failed to upload file.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUploadingFile(false);
+    }
+  };
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -684,14 +735,22 @@ export default function MiniAppShop() {
 
   // Send message in human live chat mode
   const handleSendLiveMessage = async () => {
-    if (!chatMessage.trim() || isSendingChat || !user?.telegramId) return;
+    if ((!chatMessage.trim() && !uploadedAttachment) || isSendingChat || !user?.telegramId) return;
 
     const userMsg = chatMessage.trim();
+    const attachmentUrl = uploadedAttachment?.url || null;
+    const attachmentType = uploadedAttachment?.type || null;
+
     setChatMessage("");
+    setUploadedAttachment(null);
     setIsSendingChat(true);
 
     try {
-      const res = await miniApiRequest("POST", "/api/mini/support/send", { message: userMsg });
+      const res = await miniApiRequest("POST", "/api/mini/support/send", { 
+        message: userMsg,
+        attachmentUrl,
+        attachmentType
+      });
       const data = await res.json();
       
       setLiveMessages(prev => {
@@ -1758,7 +1817,7 @@ export default function MiniAppShop() {
                 {isGuest ? "Demo Guest" : "Authenticated"}
               </span>
               <span className="text-base font-black tracking-tighter text-neutral-900 dark:text-white leading-none italic">
-                {isGuest ? "WEB" : (user?.firstName?.toUpperCase() || "ACCESS_DENIED")}
+                {isGuest ? "WEB" : (user?.firstName?.toUpperCase() || user?.username?.toUpperCase() || (user?.telegramId ? `ID: ${user.telegramId}` : "CUSTOMER"))}
               </span>
             </div>
           </div>
@@ -2179,9 +2238,32 @@ export default function MiniAppShop() {
                                 ? 'bg-primary text-white rounded-tr-none shadow-lg' 
                                 : 'bg-gradient-to-br from-purple-600 to-indigo-700 text-white rounded-tl-none border border-white/5 shadow-md'
                             }`}>
-                              <div className="space-y-1 break-all">
-                                {msg.message}
-                              </div>
+                              {msg.attachmentUrl && msg.attachmentType === "image" && (
+                                <div className="mb-2 max-w-full overflow-hidden rounded-xl">
+                                  <img 
+                                    src={msg.attachmentUrl} 
+                                    alt="attachment" 
+                                    className="max-w-full h-auto rounded-xl hover:opacity-90 transition-opacity cursor-pointer"
+                                    onClick={() => window.open(msg.attachmentUrl!, "_blank")}
+                                  />
+                                </div>
+                              )}
+                              {msg.attachmentUrl && msg.attachmentType === "pdf" && (
+                                <a 
+                                  href={msg.attachmentUrl} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className="flex items-center gap-2 p-2.5 bg-black/25 rounded-xl mb-2 hover:bg-black/35 transition-all text-purple-300 font-bold border border-white/5"
+                                >
+                                  <FileText className="w-4 h-4 text-purple-400 shrink-0" />
+                                  <span className="truncate text-[9px] hover:underline">View PDF Document</span>
+                                </a>
+                              )}
+                              {(!msg.attachmentUrl || (msg.message !== "📷 Photo Attachment" && msg.message !== "📄 PDF Attachment")) && (
+                                <div className="space-y-1 break-all">
+                                  {msg.message}
+                                </div>
+                              )}
                               <div className="text-[7px] text-white/30 text-right mt-1 font-semibold uppercase">
                                 {formatTime(msg.createdAt)}
                               </div>
@@ -2203,22 +2285,64 @@ export default function MiniAppShop() {
               </div>
 
               {/* Chat Input */}
-              <div className="p-4 bg-white/5 border-t border-white/10 flex gap-2">
-                <input 
-                  type="text"
-                  placeholder={chatMode === "ai" ? "Ask anything..." : "Reply to live agent..."}
-                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-[11px] text-white focus:outline-none focus:border-primary/50"
-                  value={chatMessage}
-                  onChange={(e) => setChatMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && (chatMode === 'human' ? handleSendLiveMessage() : handleSendChat())}
-                />
-                <button 
-                  onClick={chatMode === 'human' ? handleSendLiveMessage : handleSendChat}
-                  disabled={!chatMessage.trim() || isSendingChat}
-                  className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center transition-transform active:scale-90 disabled:opacity-50"
-                >
-                  <Send className="w-4 h-4 text-white" />
-                </button>
+              <div className="p-4 bg-white/5 border-t border-white/10 flex flex-col gap-2">
+                {uploadedAttachment && (
+                  <div className="flex items-center justify-between p-2 bg-purple-950/20 border border-purple-500/20 rounded-xl animate-in slide-in-from-bottom-2 duration-300">
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-white truncate">
+                      {uploadedAttachment.type === "image" ? (
+                        <img src={uploadedAttachment.url} alt="preview" className="w-8 h-8 rounded object-cover border border-white/10 shrink-0" />
+                      ) : (
+                        <FileText className="w-6 h-6 text-purple-400 shrink-0" />
+                      )}
+                      <span className="truncate">{uploadedAttachment.name}</span>
+                    </div>
+                    <button 
+                      onClick={() => setUploadedAttachment(null)}
+                      className="p-1 text-white/50 hover:text-white hover:bg-white/5 rounded-full transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                <div className="flex gap-2 w-full">
+                  {chatMode === "human" && (
+                    <>
+                      <input 
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        onChange={handleUploadFile}
+                        accept="image/*,application/pdf"
+                      />
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploadingFile || isSendingChat}
+                        className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center transition-all hover:bg-white/10 active:scale-95 disabled:opacity-50 shrink-0"
+                      >
+                        {isUploadingFile ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                        ) : (
+                          <Paperclip className="w-4 h-4 text-white/60" />
+                        )}
+                      </button>
+                    </>
+                  )}
+                  <input 
+                    type="text"
+                    placeholder={chatMode === "ai" ? "Ask anything..." : "Reply to live agent..."}
+                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-[11px] text-white focus:outline-none focus:border-primary/50 min-w-0"
+                    value={chatMessage}
+                    onChange={(e) => setChatMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && (chatMode === 'human' ? handleSendLiveMessage() : handleSendChat())}
+                  />
+                  <button 
+                    onClick={chatMode === 'human' ? handleSendLiveMessage : handleSendChat}
+                    disabled={(!chatMessage.trim() && !uploadedAttachment) || isSendingChat}
+                    className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center transition-transform active:scale-90 disabled:opacity-50 shrink-0"
+                  >
+                    <Send className="w-4 h-4 text-white" />
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}

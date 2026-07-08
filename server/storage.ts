@@ -52,7 +52,10 @@ import {
   type InsertCheckedIp,
   vpnServers,
   type VpnServer,
-  type InsertVpnServer
+  type InsertVpnServer,
+  uploadedFiles,
+  type UploadedFile,
+  type InsertUploadedFile
 } from "@shared/schema";
 import { format } from "date-fns";
 import { eq, desc, asc, count, sql, and, or, gt, gte, lte, isNull, isNotNull } from "drizzle-orm";
@@ -173,6 +176,10 @@ export interface IStorage {
   createVpnServer(server: InsertVpnServer): Promise<VpnServer>;
   updateVpnServer(id: number, data: Partial<VpnServer>): Promise<VpnServer>;
   deleteVpnServer(id: number): Promise<void>;
+
+  // Uploaded Files
+  getUploadedFile(filename: string): Promise<UploadedFile | undefined>;
+  saveUploadedFile(filename: string, mimeType: string, data: string): Promise<UploadedFile>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -929,6 +936,23 @@ export class DatabaseStorage implements IStorage {
 
   async deleteVpnServer(id: number): Promise<void> {
     await db.delete(vpnServers).where(eq(vpnServers.id, id));
+  }
+
+  // Uploaded Files
+  async getUploadedFile(filename: string): Promise<UploadedFile | undefined> {
+    const [file] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.filename, filename));
+    return file;
+  }
+
+  async saveUploadedFile(filename: string, mimeType: string, data: string): Promise<UploadedFile> {
+    const [newFile] = await db.insert(uploadedFiles)
+      .values({ filename, mimeType, data })
+      .onConflictDoUpdate({
+        target: uploadedFiles.filename,
+        set: { mimeType, data, createdAt: new Date() }
+      })
+      .returning();
+    return newFile;
   }
 }
 

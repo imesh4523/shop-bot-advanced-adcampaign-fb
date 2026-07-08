@@ -20,7 +20,10 @@ import {
   Clock,
   Plus,
   Trash2,
-  Settings
+  Settings,
+  Paperclip,
+  FileText,
+  X
 } from "lucide-react";
 import { 
   Dialog, 
@@ -66,6 +69,12 @@ export default function SupportChatPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [replyText, setReplyText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [uploadedAttachment, setUploadedAttachment] = useState<{ url: string; type: 'image' | 'pdf'; name: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [isClearingChat, setIsClearingChat] = useState(false);
+  const [isClearingMedia, setIsClearingMedia] = useState(false);
 
   // States for customizing fast replies
   const [isEditingTemplates, setIsEditingTemplates] = useState(false);
@@ -186,8 +195,8 @@ export default function SupportChatPage() {
 
   // 7. Send reply mutation
   const sendReplyMutation = useMutation({
-    mutationFn: async ({ telegramId, message }: { telegramId: string; message: string }) => {
-      const res = await apiRequest("POST", "/api/support/reply", { telegramId, message });
+    mutationFn: async ({ telegramId, message, attachmentUrl, attachmentType }: { telegramId: string; message: string; attachmentUrl?: string | null; attachmentType?: string | null }) => {
+      const res = await apiRequest("POST", "/api/support/reply", { telegramId, message, attachmentUrl, attachmentType });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.message || "Failed to send message");
@@ -196,6 +205,7 @@ export default function SupportChatPage() {
     },
     onSuccess: (data) => {
       setReplyText("");
+      setUploadedAttachment(null);
       queryClient.invalidateQueries({ queryKey: ["/api/support/messages", selectedChatId] });
       queryClient.invalidateQueries({ queryKey: ["/api/support/chats"] });
     },
@@ -209,12 +219,110 @@ export default function SupportChatPage() {
   });
 
   const handleSendReply = () => {
-    if (!selectedChatId || !replyText.trim() || sendReplyMutation.isPending) return;
+    if (!selectedChatId || sendReplyMutation.isPending) return;
+    if (!replyText.trim() && !uploadedAttachment) return;
 
     sendReplyMutation.mutate({
       telegramId: selectedChatId,
-      message: replyText.trim()
+      message: replyText.trim(),
+      attachmentUrl: uploadedAttachment?.url || null,
+      attachmentType: uploadedAttachment?.type || null
     });
+  };
+
+  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingFile(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/support/upload", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!res.ok) {
+        throw new Error("Upload failed");
+      }
+
+      const data = await res.json();
+      setUploadedAttachment({
+        url: data.fileUrl,
+        type: file.type.startsWith("image/") ? "image" : "pdf",
+        name: file.name
+      });
+      toast({
+        title: "File Uploaded",
+        description: `${file.name} uploaded successfully.`
+      });
+    } catch (err: any) {
+      toast({
+        title: "Upload Failed",
+        description: err.message || "Failed to upload file.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUploadingFile(false);
+    }
+  };
+
+  const handleClearChat = async () => {
+    if (!selectedChatId) return;
+    if (!confirm("Are you sure you want to permanently clear this chat history?")) return;
+
+    setIsClearingChat(true);
+    try {
+      const res = await fetch(`/api/support/chats/${selectedChatId}`, {
+        method: "DELETE"
+      });
+      if (!res.ok) throw new Error("Failed to clear chat");
+      
+      toast({
+        title: "Chat Cleared",
+        description: "Chat history has been cleared successfully."
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/support/messages", selectedChatId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/support/chats"] });
+    } catch (err: any) {
+      toast({
+        title: "Action Failed",
+        description: err.message,
+        variant: "destructive"
+      });
+    } finally {
+      setIsClearingChat(false);
+    }
+  };
+
+  const handleClearMedia = async () => {
+    if (!selectedChatId) return;
+    if (!confirm("Are you sure you want to delete all photos and PDF attachments from this chat?")) return;
+
+    setIsClearingMedia(true);
+    try {
+      const res = await fetch(`/api/support/chats/${selectedChatId}/media`, {
+        method: "DELETE"
+      });
+      if (!res.ok) throw new Error("Failed to clear media");
+      
+      toast({
+        title: "Media Cleared",
+        description: "All files and attachments have been removed from this chat."
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/support/messages", selectedChatId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/support/chats"] });
+    } catch (err: any) {
+      toast({
+        title: "Action Failed",
+        description: err.message,
+        variant: "destructive"
+      });
+    } finally {
+      setIsClearingMedia(false);
+    }
   };
 
   const getAvatarInitials = (chat: SupportChat) => {
@@ -367,6 +475,34 @@ export default function SupportChatPage() {
                     </CardDescription>
                   </div>
                 </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    onClick={handleClearMedia}
+                    disabled={isClearingMedia || isClearingChat}
+                    className="h-8 px-3 text-white/50 hover:text-orange-400 hover:bg-white/[0.03] text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all"
+                  >
+                    {isClearingMedia ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
+                    Clear Media Only
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={handleClearChat}
+                    disabled={isClearingChat || isClearingMedia}
+                    className="h-8 px-3 text-white/50 hover:text-red-400 hover:bg-white/[0.03] text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all"
+                  >
+                    {isClearingChat ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
+                    Clear Full Chat
+                  </Button>
+                </div>
               </CardHeader>
 
               {/* Messages Body */}
@@ -391,7 +527,30 @@ export default function SupportChatPage() {
                                   ? 'bg-[#18112e] text-white rounded-br-none border border-white/5' 
                                   : 'bg-gradient-to-br from-purple-600 to-indigo-700 text-white rounded-bl-none'
                               }`}>
-                                {msg.message}
+                                {msg.attachmentUrl && msg.attachmentType === "image" && (
+                                  <div className="mb-2 max-w-full overflow-hidden rounded-xl">
+                                    <img 
+                                      src={msg.attachmentUrl} 
+                                      alt="attachment" 
+                                      className="max-w-[280px] h-auto rounded-xl hover:opacity-90 transition-opacity cursor-pointer border border-white/10"
+                                      onClick={() => setLightboxUrl(msg.attachmentUrl)}
+                                    />
+                                  </div>
+                                )}
+                                {msg.attachmentUrl && msg.attachmentType === "pdf" && (
+                                  <a 
+                                    href={msg.attachmentUrl} 
+                                    target="_blank" 
+                                    rel="noreferrer" 
+                                    className="flex items-center gap-2 p-2.5 bg-black/20 rounded-xl mb-2 hover:bg-black/35 transition-all text-purple-300 font-bold border border-white/5"
+                                  >
+                                    <FileText className="w-4 h-4 text-purple-400 shrink-0" />
+                                    <span className="truncate text-xs hover:underline">View PDF Document</span>
+                                  </a>
+                                )}
+                                {(!msg.attachmentUrl || (msg.message !== "📷 Photo Attachment" && msg.message !== "📄 PDF Attachment")) && (
+                                  <div>{msg.message}</div>
+                                )}
                               </div>
                               <span className={`text-[9px] text-white/30 font-semibold uppercase ${isAdmin ? 'text-right' : 'text-left'}`}>
                                 {format(new Date(msg.createdAt), "hh:mm a")}
@@ -436,26 +595,67 @@ export default function SupportChatPage() {
               </div>
 
               {/* Reply Input Box */}
-              <div className="p-4 bg-[#0f0a1a] border-t border-white/5 shrink-0">
+              <div className="p-4 bg-[#0f0a1a] border-t border-white/5 shrink-0 flex flex-col gap-3">
+                {uploadedAttachment && (
+                  <div className="flex items-center justify-between p-2.5 bg-purple-950/40 border border-purple-500/20 rounded-2xl animate-in slide-in-from-bottom-2 duration-300">
+                    <div className="flex items-center gap-2.5 text-xs font-bold text-white truncate">
+                      {uploadedAttachment.type === "image" ? (
+                        <img src={uploadedAttachment.url} alt="preview" className="w-10 h-10 rounded-lg object-cover border border-white/10 shrink-0" />
+                      ) : (
+                        <FileText className="w-8 h-8 text-purple-400 shrink-0" />
+                      )}
+                      <span className="truncate">{uploadedAttachment.name}</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      onClick={() => setUploadedAttachment(null)}
+                      className="p-1 h-8 w-8 text-white/50 hover:text-white hover:bg-white/5 rounded-full transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
                     handleSendReply();
                   }}
-                  className="flex gap-3"
+                  className="flex gap-3 items-center"
                 >
+                  <input 
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    onChange={handleUploadFile}
+                    accept="image/*,application/pdf"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingFile || sendReplyMutation.isPending}
+                    className="h-14 w-14 rounded-2xl bg-white/[0.03] border-white/10 flex items-center justify-center transition-all hover:bg-white/[0.08] active:scale-95 disabled:opacity-50 shrink-0"
+                  >
+                    {isUploadingFile ? (
+                      <Loader2 className="w-5 h-5 animate-spin text-purple-400" />
+                    ) : (
+                      <Paperclip className="w-5 h-5 text-white/60" />
+                    )}
+                  </Button>
+                  
                   <Input
                     type="text"
                     placeholder="Write a message..."
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
-                    className="h-14 bg-white/[0.03] border-white/10 rounded-2xl focus:border-purple-500/50"
+                    className="h-14 bg-white/[0.03] border-white/10 rounded-2xl focus:border-purple-500/50 flex-1 min-w-0"
                     disabled={sendReplyMutation.isPending}
                   />
                   <Button
                     type="submit"
                     className="h-14 w-14 rounded-2xl bg-gradient-to-r from-purple-500 to-blue-600 hover:from-purple-600 hover:to-blue-700 shadow-lg shadow-purple-500/10 active:scale-95 transition-all shrink-0"
-                    disabled={!replyText.trim() || sendReplyMutation.isPending}
+                    disabled={(!replyText.trim() && !uploadedAttachment) || sendReplyMutation.isPending}
                   >
                     {sendReplyMutation.isPending ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
@@ -553,6 +753,28 @@ export default function SupportChatPage() {
               </Button>
             </div>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lightbox Modal */}
+      <Dialog open={!!lightboxUrl} onOpenChange={() => setLightboxUrl(null)}>
+        <DialogContent className="border-0 bg-transparent text-white max-w-4xl p-0 flex items-center justify-center shadow-none select-none">
+          {lightboxUrl && (
+            <div className="relative max-h-[85vh] max-w-full overflow-hidden flex flex-col items-center">
+              <img 
+                src={lightboxUrl} 
+                alt="Enlarged view" 
+                className="max-h-[80vh] max-w-full object-contain rounded-2xl shadow-2xl border border-white/5"
+              />
+              <Button
+                onClick={() => setLightboxUrl(null)}
+                className="mt-4 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl px-4 py-2 flex items-center gap-1.5"
+              >
+                <X className="w-4 h-4" />
+                Close Preview
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

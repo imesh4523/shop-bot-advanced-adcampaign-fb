@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,10 +20,93 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-  const { user, isLoading, login, isLoggingIn, verify2FA, isVerifying2FA } = useAuth();
+  const { user, isLoading, login, isLoggingIn, loginWithGoogle, isLoggingInGoogle, verify2FA, isVerifying2FA } = useAuth();
   const { toast } = useToast();
   const [show2FA, setShow2FA] = useState(false);
   const [otpCode, setOtpCode] = useState("");
+
+  const [googleClientId, setGoogleClientId] = useState<string | null>(null);
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+
+  useEffect(() => {
+    const fetchGoogleSettings = async () => {
+      try {
+        const resEnabled = await fetch("/api/settings/GOOGLE_LOGIN_ENABLED");
+        const dataEnabled = await resEnabled.json();
+        const resClientId = await fetch("/api/settings/GOOGLE_CLIENT_ID");
+        const dataClientId = await resClientId.json();
+
+        if (dataEnabled?.value === "true" && dataClientId?.value) {
+          setGoogleClientId(dataClientId.value.trim());
+          setGoogleEnabled(true);
+        }
+      } catch (err) {
+        console.error("Failed to load Google login settings:", err);
+      }
+    };
+    fetchGoogleSettings();
+  }, []);
+
+  const handleGoogleCredentialResponse = async (response: any) => {
+    try {
+      await loginWithGoogle(response.credential);
+      toast({
+        title: "Login successful",
+        description: "Welcome back!",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Google Login failed",
+        description: error.message || "Unauthorized access.",
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (!googleEnabled || !googleClientId) return;
+
+    if (!document.getElementById("google-gsi-client")) {
+      const script = document.createElement("script");
+      script.id = "google-gsi-client";
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        initializeGoogleButton();
+      };
+      document.body.appendChild(script);
+    } else {
+      initializeGoogleButton();
+    }
+
+    function initializeGoogleButton() {
+      try {
+        if ((window as any).google?.accounts?.id) {
+          (window as any).google.accounts.id.initialize({
+            client_id: googleClientId,
+            callback: handleGoogleCredentialResponse,
+          });
+          
+          const targetDiv = document.getElementById("google-signin-div");
+          if (targetDiv) {
+            (window as any).google.accounts.id.renderButton(
+              targetDiv,
+              { 
+                theme: "outline", 
+                size: "large", 
+                width: 360, 
+                shape: "pill",
+                text: "signin_with"
+              }
+            );
+          }
+        }
+      } catch (e) {
+        console.error("Error rendering Google button:", e);
+      }
+    }
+  }, [googleEnabled, googleClientId]);
 
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -184,7 +267,7 @@ export default function LoginPage() {
                           type="submit"
                           size="lg" 
                           className="w-full h-14 rounded-2xl font-bold text-lg bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-xl shadow-primary/20 transition-all active:scale-[0.98]" 
-                          disabled={isLoggingIn}
+                          disabled={isLoggingIn || isLoggingInGoogle}
                         >
                           {isLoggingIn ? (
                             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -197,6 +280,20 @@ export default function LoginPage() {
                         </Button>
                       </form>
                     </Form>
+
+                    {googleEnabled && (
+                      <div className="mt-6 flex flex-col items-center justify-center space-y-4 border-t border-white/5 pt-6 w-full">
+                        <div className="text-xs font-bold uppercase tracking-widest text-white/30">Or sign in with</div>
+                        {isLoggingInGoogle ? (
+                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                        ) : (
+                          <div 
+                            id="google-signin-div" 
+                            className="w-full flex justify-center scale-95 hover:scale-100 transition-transform duration-300"
+                          />
+                        )}
+                      </div>
+                    )}
                   </motion.div>
                 ) : (
                   <motion.div
