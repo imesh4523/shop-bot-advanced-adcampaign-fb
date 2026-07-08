@@ -32,7 +32,7 @@ import {
 
 import { format } from "date-fns";
 import { FaAws, FaCcVisa, FaCcMastercard, FaCcAmex, FaTelegram } from "react-icons/fa";
-import { SiDigitalocean, SiGooglecloud, SiVultr, SiHetzner, SiBinance } from "react-icons/si";
+import { SiDigitalocean, SiGooglecloud, SiVultr, SiHetzner, SiBinance, SiOpenai, SiClaude, SiGooglegemini } from "react-icons/si";
 import { VscAzure } from "react-icons/vsc";
 
 import { Button } from "@/components/ui/button";
@@ -1251,11 +1251,11 @@ export default function MiniAppShop() {
             { id: 'vultr', label: 'Vultr', icon: <SiVultr className="w-4 h-4" /> },
             { id: 'hetzner', label: 'Hetzner', icon: <SiHetzner className="w-4 h-4" /> },
             { id: 'oracle', label: 'Oracle', icon: <Database className="w-4 h-4" /> },
-            { id: 'chatgpt', label: 'ChatGPT', icon: <img src="/openai.svg" className="w-4 h-4 object-contain transition-all" /> },
-            { id: 'claude', label: 'Claude', icon: <img src="/claude.svg" className="w-4 h-4 object-contain transition-all" /> },
-            { id: 'gemini', label: 'Gemini', icon: <img src="/gemini.svg" className="w-4 h-4 object-contain transition-all" /> },
-            { id: 'cursor', label: 'Cursor', icon: <img src="/cursor.svg" className="w-4 h-4 object-contain transition-all" /> },
-            { id: 'capcut', label: 'CapCut', icon: <img src="/capcut.svg" className="w-4 h-4 object-contain transition-all" /> },
+            { id: 'chatgpt', label: 'ChatGPT', icon: <SiOpenai className="w-4 h-4" style={{color:'#10a37f'}} /> },
+            { id: 'claude', label: 'Claude', icon: <SiClaude className="w-4 h-4" style={{color:'#D4A574'}} /> },
+            { id: 'gemini', label: 'Gemini', icon: <SiGooglegemini className="w-4 h-4" style={{color:'#4285F4'}} /> },
+            { id: 'cursor', label: 'Cursor', icon: <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none"><rect width="24" height="24" rx="6" fill="#000"/><path d="M12 4L20 19H4L12 4Z" fill="white"/></svg> },
+            { id: 'capcut', label: 'CapCut', icon: <svg viewBox="0 0 24 24" className="w-4 h-4"><rect width="24" height="24" rx="4" fill="#000"/><path d="M7 7h4v10H7zM13 7h4v10h-4z" fill="white"/></svg> },
           ].map((cat) => (
             <button
               key={cat.id}
