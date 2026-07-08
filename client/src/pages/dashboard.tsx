@@ -1,14 +1,17 @@
 import { useStats } from "@/hooks/use-stats";
 import { useOrders } from "@/hooks/use-orders";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   DollarSign, 
   Package, 
   ShoppingCart, 
   TrendingUp, 
   Users,
-  Eye
+  Eye,
+  CreditCard,
+  Lock,
+  Unlock
 } from "lucide-react";
 import {
   AreaChart,
@@ -22,16 +25,51 @@ import {
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Dashboard() {
   const { data: stats, isLoading: statsLoading } = useStats();
   const { data: orders, isLoading: ordersLoading } = useOrders();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
   const { data: trafficStats, isLoading: trafficLoading } = useQuery({
     queryKey: ["/api/admin/traffic-stats"],
     queryFn: async () => {
       const res = await fetch("/api/admin/traffic-stats");
       if (!res.ok) throw new Error("Failed to fetch traffic stats");
       return res.json();
+    }
+  });
+
+  // Stripe lock/unlock quick toggle
+  const { data: stripeEnabledSetting, isLoading: stripeLoading } = useQuery<{ value: string }>({
+    queryKey: ["/api/settings/STRIPE_ENABLED"],
+  });
+  const stripeEnabled = stripeEnabledSetting?.value !== "false";
+
+  const stripeToggleMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "STRIPE_ENABLED", value: enabled ? "true" : "false" }),
+      });
+      if (!res.ok) throw new Error("Failed to update Stripe status");
+      return res.json();
+    },
+    onSuccess: (_, enabled) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/STRIPE_ENABLED"] });
+      toast({
+        title: enabled ? "✅ Stripe Unlocked" : "🔒 Stripe Locked",
+        description: enabled
+          ? "Card payments are now enabled for all users."
+          : "Card payments have been temporarily disabled.",
+      });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update Stripe status.", variant: "destructive" });
     }
   });
 
@@ -120,6 +158,52 @@ export default function Dashboard() {
           loading={trafficLoading}
         />
       </div>
+
+      {/* Stripe Gateway Quick Toggle */}
+      <Card className="glass-card border-0 overflow-hidden">
+        <div className={`flex items-center justify-between p-6 transition-all duration-500 ${stripeEnabled ? 'bg-gradient-to-r from-violet-500/15 to-blue-500/10' : 'bg-gradient-to-r from-red-500/15 to-orange-500/10'}`}>
+          <div className="flex items-center gap-4">
+            <div className={`p-3 rounded-2xl transition-all duration-300 ${stripeEnabled ? 'bg-violet-500/20' : 'bg-red-500/20'}`}>
+              <CreditCard className={`w-6 h-6 transition-colors ${stripeEnabled ? 'text-violet-400' : 'text-red-400'}`} />
+            </div>
+            <div>
+              <h3 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
+                Stripe Card Gateway
+                {stripeLoading ? (
+                  <Skeleton className="h-5 w-16 bg-white/10 rounded-full" />
+                ) : (
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${stripeEnabled ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                    {stripeEnabled ? "ACTIVE" : "LOCKED"}
+                  </span>
+                )}
+              </h3>
+              <p className="text-sm text-white/40 mt-0.5">
+                {stripeEnabled
+                  ? "Credit/debit card deposits are currently enabled for all users."
+                  : "Card deposits are disabled. Users cannot pay via Stripe."}
+              </p>
+            </div>
+          </div>
+          <Button
+            id="stripe-toggle-btn"
+            onClick={() => stripeToggleMutation.mutate(!stripeEnabled)}
+            disabled={stripeToggleMutation.isPending || stripeLoading}
+            className={`flex items-center gap-2 h-12 px-6 rounded-2xl font-black text-sm transition-all duration-300 shadow-lg ${
+              stripeEnabled
+                ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/30'
+                : 'bg-gradient-to-r from-violet-500 to-blue-600 hover:opacity-90 text-white shadow-violet-500/30'
+            }`}
+          >
+            {stripeToggleMutation.isPending ? (
+              <span className="animate-spin w-4 h-4 border-2 border-white/50 border-t-white rounded-full" />
+            ) : stripeEnabled ? (
+              <><Lock className="w-4 h-4" /> Lock Stripe</>
+            ) : (
+              <><Unlock className="w-4 h-4" /> Unlock Stripe</>
+            )}
+          </Button>
+        </div>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
         {/* Chart */}
