@@ -96808,7 +96808,13 @@ ${extraInstructions}
       let result;
       if (payment.paymentMethod === "binance") {
         const expectedRemark = (payment.cryptomusUuid || "").trim().toUpperCase();
-        const verification = await verifyBinancePayTransaction(expectedRemark, payment.amount / 100);
+        let expectedAmount = payment.amount / 100;
+        if (payment.currency === "LKR") {
+          const rateLkrSetting = await storage.getSetting("CURRENCY_RATE_LKR");
+          const rateLkr = rateLkrSetting?.value ? parseFloat(rateLkrSetting.value) : 300;
+          expectedAmount = expectedAmount / rateLkr;
+        }
+        const verification = await verifyBinancePayTransaction(expectedRemark, expectedAmount);
         if (verification.success && verification.orderId) {
           result = { success: true, actualAmount: payment.amount / 100, orderId: verification.orderId };
         } else {

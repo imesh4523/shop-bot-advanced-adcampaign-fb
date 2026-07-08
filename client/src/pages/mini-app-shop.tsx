@@ -1707,7 +1707,18 @@ export default function MiniAppShop() {
                 </div>
                 <div className="text-right relative z-10">
                   <div className="text-lg font-black text-neutral-900 dark:text-white tracking-tighter">
-                    +${(payment.amount / 100).toFixed(2)}
+                    {(() => {
+                      const currency = payment.currency || 'USD';
+                      const amt = payment.amount / 100;
+                      if (currency === 'LKR') {
+                        return `+Rs. ${amt.toFixed(2)}`;
+                      } else if (currency === 'USDT') {
+                        return `+${amt.toFixed(2)} USDT`;
+                      } else if (currency === 'TRX') {
+                        return `+${amt.toFixed(4)} TRX`;
+                      }
+                      return `+$${amt.toFixed(2)}`;
+                    })()}
                   </div>
                   <Badge className={`bg-transparent p-0 text-[10px] font-black uppercase tracking-[0.2em] ${payment.status === 'completed' ? 'text-green-500' : 'text-amber-500'}`}>
                     ● {payment.status} {isPendingCrypto && <span className="text-[9px] text-purple-600 dark:text-purple-400 animate-pulse font-extrabold normal-case tracking-normal ml-1">(Resume)</span>}
@@ -2759,27 +2770,62 @@ export default function MiniAppShop() {
                 <div className="bg-purple-50/50 dark:bg-white/5 p-5 rounded-3xl border border-purple-100 dark:border-white/10 space-y-3">
                   <div className="flex justify-between items-center text-xs">
                     <span className="font-bold text-neutral-400 uppercase tracking-widest">Send Exactly:</span>
-                    <span className="font-black text-neutral-900 dark:text-white">
+                    <span className="font-black text-neutral-900 dark:text-white flex items-center">
                       {(() => {
                         const rateLkr = liveLkrRate;
                         if (activeDeposit.method === 'binance' && selectedDepositCurrency === 'LKR') {
                           // Convert LKR → USDT at Binance P2P rate (rateLkr = LKR per 1 USDT)
                           const usdt = activeDeposit.amount / rateLkr;
-                          return <>
-                            <span className="text-neutral-400 text-[10px] mr-2">Rs. {activeDeposit.amount.toFixed(2)} LKR →</span>
-                            <span className="text-teal-400">{usdt.toFixed(4)} USDT</span>
-                          </>;
+                          const usdtText = usdt.toFixed(4);
+                          return <div className="flex items-center gap-1.5">
+                            <span className="text-neutral-400 text-[10px]">Rs. {activeDeposit.amount.toFixed(2)} LKR →</span>
+                            <span className="text-teal-400 font-bold flex items-center gap-1">
+                              {usdtText} USDT
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="w-5 h-5 rounded bg-neutral-100 hover:bg-neutral-200 dark:bg-white/5 dark:hover:bg-white/10 p-0 border border-neutral-200 dark:border-white/10 shadow-sm"
+                                onClick={() => {
+                                  copyToClipboard(usdtText);
+                                  toast({ title: "USDT Amount Copied", description: `${usdtText} USDT copied to clipboard.` });
+                                }}
+                              >
+                                <Copy className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400" />
+                              </Button>
+                            </span>
+                          </div>;
                         }
+                        
+                        let amtText = "";
+                        let labelText = "";
                         if (selectedDepositCurrency === 'LKR') {
-                          return `Rs. ${activeDeposit.amount.toFixed(2)} LKR`;
+                          amtText = activeDeposit.amount.toFixed(2);
+                          labelText = `Rs. ${amtText} LKR`;
+                        } else if (selectedDepositCurrency === 'USDT') {
+                          amtText = activeDeposit.amount.toFixed(2);
+                          labelText = `${amtText} USDT`;
+                        } else if (selectedDepositCurrency === 'TRX') {
+                          amtText = activeDeposit.amount.toFixed(4);
+                          labelText = `${amtText} TRX`;
+                        } else {
+                          amtText = activeDeposit.amount.toFixed(2);
+                          labelText = `$${amtText} USD`;
                         }
-                        if (selectedDepositCurrency === 'USDT') {
-                          return `${activeDeposit.amount.toFixed(2)} USDT`;
-                        }
-                        if (selectedDepositCurrency === 'TRX') {
-                          return `${activeDeposit.amount.toFixed(4)} TRX`;
-                        }
-                        return `$${activeDeposit.amount.toFixed(2)} USD`;
+
+                        return <div className="flex items-center gap-1 text-teal-400 font-bold">
+                          <span>{labelText}</span>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="w-5 h-5 rounded bg-neutral-100 hover:bg-neutral-200 dark:bg-white/5 dark:hover:bg-white/10 p-0 border border-neutral-200 dark:border-white/10 shadow-sm"
+                            onClick={() => {
+                              copyToClipboard(amtText);
+                              toast({ title: "Amount Copied", description: `${amtText} copied to clipboard.` });
+                            }}
+                          >
+                            <Copy className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400" />
+                          </Button>
+                        </div>;
                       })()}
                     </span>
                   </div>
