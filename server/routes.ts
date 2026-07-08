@@ -1548,6 +1548,10 @@ export async function registerRoutes(
       const amountCents = Math.round(amount * 100);
 
       if (method === 'stripe') {
+        const stripeEnabledSetting = await storage.getSetting("STRIPE_ENABLED");
+        if (stripeEnabledSetting?.value === "false") {
+          return res.status(400).json({ message: "Stripe card deposits are currently locked by the administrator." });
+        }
         const successUrl = `${req.protocol}://${req.get('host')}/?payment=success&session_id={CHECKOUT_SESSION_ID}`;
         const cancelUrl = `${req.protocol}://${req.get('host')}/?payment=cancel`;
         
@@ -2267,6 +2271,22 @@ export async function registerRoutes(
         const totalPriceInProductCurrency = product.price * quantity;
         const totalPriceInUsdCents = Math.round(totalPriceInProductCurrency / rate);
 
+        // Deduce payment currency (default to product currency if not specified or invalid)
+        let payCurrency = (req.body.currency || product.currency || 'USD').toUpperCase();
+        if (!['USD', 'LKR', 'USDT', 'TRX'].includes(payCurrency)) {
+          payCurrency = (product.currency || 'USD').toUpperCase();
+        }
+
+        // Calculate amount to deduct in the payment currency
+        let deductAmount = totalPriceInUsdCents; // Default to USD cents
+        if (payCurrency !== 'USD') {
+          const payCurrencySetting = await tx.query.settings.findFirst({
+            where: eq(settings.key, `CURRENCY_RATE_${payCurrency}`)
+          });
+          const payRate = payCurrencySetting ? parseFloat(payCurrencySetting.value) : 1.0;
+          deductAmount = Math.round((totalPriceInUsdCents / 100) * payRate * 100);
+        }
+
         // 2. Check stock first
         const availableItems = await tx.select()
           .from(credentials)
@@ -2278,40 +2298,36 @@ export async function registerRoutes(
           throw new Error(`Insufficient stock. Only ${availableItems.length} items available.`);
         }
 
-        // 3. Check and Deduct balance atomically based on product currency
+        // 3. Check and Deduct balance atomically based on payment currency
         let updatedUser;
-        const currency = product.currency || 'USD';
-        if (currency === 'LKR') {
-          const totalPriceInLkrCents = Math.round(product.price * quantity);
+        if (payCurrency === 'LKR') {
           [updatedUser] = await tx
             .update(telegramUsers)
-            .set({ balanceLkr: sql`${telegramUsers.balanceLkr} - ${totalPriceInLkrCents}` })
-            .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceLkr, totalPriceInLkrCents)))
+            .set({ balanceLkr: sql`${telegramUsers.balanceLkr} - ${deductAmount}` })
+            .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceLkr, deductAmount)))
             .returning();
-        } else if (currency === 'USDT') {
-          const totalPriceInUsdtCents = Math.round(product.price * quantity);
+        } else if (payCurrency === 'USDT') {
           [updatedUser] = await tx
             .update(telegramUsers)
-            .set({ balanceUsdt: sql`${telegramUsers.balanceUsdt} - ${totalPriceInUsdtCents}` })
-            .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceUsdt, totalPriceInUsdtCents)))
+            .set({ balanceUsdt: sql`${telegramUsers.balanceUsdt} - ${deductAmount}` })
+            .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceUsdt, deductAmount)))
             .returning();
-        } else if (currency === 'TRX') {
-          const totalPriceInTrxCents = Math.round(product.price * quantity);
+        } else if (payCurrency === 'TRX') {
           [updatedUser] = await tx
             .update(telegramUsers)
-            .set({ balanceTrx: sql`${telegramUsers.balanceTrx} - ${totalPriceInTrxCents}` })
-            .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceTrx, totalPriceInTrxCents)))
+            .set({ balanceTrx: sql`${telegramUsers.balanceTrx} - ${deductAmount}` })
+            .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceTrx, deductAmount)))
             .returning();
         } else {
           [updatedUser] = await tx
             .update(telegramUsers)
-            .set({ balance: sql`${telegramUsers.balance} - ${totalPriceInUsdCents}` })
-            .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, totalPriceInUsdCents)))
+            .set({ balance: sql`${telegramUsers.balance} - ${deductAmount}` })
+            .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, deductAmount)))
             .returning();
         }
 
         if (!updatedUser) {
-          throw new Error("Insufficient balance");
+          throw new Error(`Insufficient balance in ${payCurrency}.`);
         }
 
         const itemIds = availableItems.map(item => item.id);
@@ -2450,39 +2466,51 @@ export async function registerRoutes(
         const rate = currencySetting ? parseFloat(currencySetting.value) : 1.0;
         const priceInUsdCents = Math.round(offer.price / rate);
 
-        // Check balance atomically based on offer product currency
+        // Deduce payment currency
+        let payCurrency = (req.body.currency || productCurrency || 'USD').toUpperCase();
+        if (!['USD', 'LKR', 'USDT', 'TRX'].includes(payCurrency)) {
+          payCurrency = productCurrency.toUpperCase();
+        }
+
+        // Calculate amount to deduct in payment currency
+        let deductAmount = priceInUsdCents;
+        if (payCurrency !== 'USD') {
+          const payCurrencySetting = await tx.query.settings.findFirst({
+            where: eq(settings.key, `CURRENCY_RATE_${payCurrency}`)
+          });
+          const payRate = payCurrencySetting ? parseFloat(payCurrencySetting.value) : 1.0;
+          deductAmount = Math.round((priceInUsdCents / 100) * payRate * 100);
+        }
+
+        // Check balance atomically based on payment currency
         let updatedUser;
-        const currency = offer.product?.currency || 'USD';
-        if (currency === 'LKR') {
-          const priceInLkrCents = offer.price;
+        if (payCurrency === 'LKR') {
           [updatedUser] = await tx
             .update(telegramUsers)
-            .set({ balanceLkr: sql`${telegramUsers.balanceLkr} - ${priceInLkrCents}` })
-            .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceLkr, priceInLkrCents)))
+            .set({ balanceLkr: sql`${telegramUsers.balanceLkr} - ${deductAmount}` })
+            .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceLkr, deductAmount)))
             .returning();
-        } else if (currency === 'USDT') {
-          const priceInUsdtCents = offer.price;
+        } else if (payCurrency === 'USDT') {
           [updatedUser] = await tx
             .update(telegramUsers)
-            .set({ balanceUsdt: sql`${telegramUsers.balanceUsdt} - ${priceInUsdtCents}` })
-            .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceUsdt, priceInUsdtCents)))
+            .set({ balanceUsdt: sql`${telegramUsers.balanceUsdt} - ${deductAmount}` })
+            .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceUsdt, deductAmount)))
             .returning();
-        } else if (currency === 'TRX') {
-          const priceInTrxCents = offer.price;
+        } else if (payCurrency === 'TRX') {
           [updatedUser] = await tx
             .update(telegramUsers)
-            .set({ balanceTrx: sql`${telegramUsers.balanceTrx} - ${priceInTrxCents}` })
-            .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceTrx, priceInTrxCents)))
+            .set({ balanceTrx: sql`${telegramUsers.balanceTrx} - ${deductAmount}` })
+            .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceTrx, deductAmount)))
             .returning();
         } else {
           [updatedUser] = await tx
             .update(telegramUsers)
-            .set({ balance: sql`${telegramUsers.balance} - ${priceInUsdCents}` })
-            .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, priceInUsdCents)))
+            .set({ balance: sql`${telegramUsers.balance} - ${deductAmount}` })
+            .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, deductAmount)))
             .returning();
         }
 
-        if (!updatedUser) throw new Error("Insufficient balance");
+        if (!updatedUser) throw new Error(`Insufficient balance in ${payCurrency}.`);
 
         // Get stock
         const availableItems = await tx.select()

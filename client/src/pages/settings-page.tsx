@@ -211,6 +211,7 @@ export default function SettingsPage() {
   const [smtpPass, setSmtpPass] = useState("");
 
   const [emailLoginOnly, setEmailLoginOnly] = useState(false);
+  const [stripeEnabled, setStripeEnabled] = useState(true);
 
   const { data: setting, isLoading: isTokenLoading } = useQuery<{ key: string, value: string }>({
     queryKey: ["/api/settings/TELEGRAM_BOT_TOKEN"],
@@ -420,6 +421,9 @@ export default function SettingsPage() {
   const { data: stripeWebhookSetting, isLoading: isStripeWebhookLoading } = useQuery<{ key: string, value: string }>({
     queryKey: ["/api/settings/STRIPE_WEBHOOK_SECRET"],
   });
+  const { data: stripeEnabledSetting, isLoading: isStripeEnabledLoading } = useQuery<{ key: string, value: string }>({
+    queryKey: ["/api/settings/STRIPE_ENABLED"],
+  });
   const { data: minDepositSetting, isLoading: isMinDepositLoading } = useQuery<{ key: string, value: string }>({
     queryKey: ["/api/settings/MIN_DEPOSIT_LIMIT"],
   });
@@ -459,7 +463,7 @@ export default function SettingsPage() {
     isEmailServiceLoading || isEmailSenderLoading || isResendApiKeyLoading || isSendgridApiKeyLoading ||
     isBrevoApiKeyLoading || isSesHostLoading || isSesPortLoading || isSesUserLoading || isSesPassLoading ||
     isSmtpHostLoading || isSmtpPortLoading || isSmtpUserLoading || isSmtpPassLoading ||
-    isEmailLoginOnlyLoading || isStripeSecretLoading || isStripeWebhookLoading || isMinDepositLoading || isDigitalOceanLoading || isGoogleClientIdLoading || isGoogleLoginEnabledLoading;
+    isEmailLoginOnlyLoading || isStripeSecretLoading || isStripeWebhookLoading || isStripeEnabledLoading || isMinDepositLoading || isDigitalOceanLoading || isGoogleClientIdLoading || isGoogleLoginEnabledLoading;
 
   const [binanceEnabled, setBinanceEnabled] = useState(true);
   const [cryptomusEnabled, setCryptomusEnabled] = useState(true);
@@ -648,6 +652,7 @@ export default function SettingsPage() {
   useEffect(() => { if (emailLoginOnlySetting?.value !== undefined) setEmailLoginOnly(emailLoginOnlySetting.value === "true"); }, [emailLoginOnlySetting]);
   useEffect(() => { if (stripeSecretSetting?.value !== undefined) setStripeSecretKey(stripeSecretSetting.value); }, [stripeSecretSetting]);
   useEffect(() => { if (stripeWebhookSetting?.value !== undefined) setStripeWebhookSecret(stripeWebhookSetting.value); }, [stripeWebhookSetting]);
+  useEffect(() => { if (stripeEnabledSetting?.value !== undefined) setStripeEnabled(stripeEnabledSetting.value !== "false"); }, [stripeEnabledSetting]);
   useEffect(() => { if (minDepositSetting?.value !== undefined) setMinDepositLimit(minDepositSetting.value); }, [minDepositSetting]);
 
   useEffect(() => {
@@ -2516,6 +2521,25 @@ export default function SettingsPage() {
                 </Button>
               </div>
               <p className="text-xs text-white/40">Used to verify and authorize webhook deposit events from Stripe.</p>
+            </div>
+
+            <div className="space-y-4 pt-4 border-t border-white/5 flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-bold text-white/70 uppercase tracking-widest block">Stripe Card Gateway Status</Label>
+                <p className="text-xs text-white/40 mt-1">Temporarily lock or unlock Stripe card deposits for all USD users.</p>
+              </div>
+              <Button
+                variant={stripeEnabled ? "default" : "outline"}
+                onClick={() => {
+                  const newValue = !stripeEnabled;
+                  setStripeEnabled(newValue);
+                  stripeConfigMutation.mutate({ key: "STRIPE_ENABLED", value: newValue ? "true" : "false" });
+                }}
+                disabled={stripeConfigMutation.isPending}
+                className={stripeEnabled ? "bg-purple-500 hover:bg-purple-600 font-bold px-6 h-12 rounded-xl text-white" : "border-white/20 font-bold px-6 h-12 rounded-xl text-white"}
+              >
+                {stripeEnabled ? "🔓 Unlocked" : "🔒 Locked"}
+              </Button>
             </div>
           </CardContent>
         </Card>

@@ -96696,6 +96696,10 @@ ${extraInstructions}
       }
       const amountCents = Math.round(amount * 100);
       if (method === "stripe") {
+        const stripeEnabledSetting = await storage.getSetting("STRIPE_ENABLED");
+        if (stripeEnabledSetting?.value === "false") {
+          return res.status(400).json({ message: "Stripe card deposits are currently locked by the administrator." });
+        }
         const successUrl = `${req.protocol}://${req.get("host")}/?payment=success&session_id={CHECKOUT_SESSION_ID}`;
         const cancelUrl = `${req.protocol}://${req.get("host")}/?payment=cancel`;
         const session2 = await createStripeSession({
@@ -97305,26 +97309,34 @@ ${extraInstructions}
         const rate = currencySetting ? parseFloat(currencySetting.value) : 1;
         const totalPriceInProductCurrency = product.price * quantity;
         const totalPriceInUsdCents = Math.round(totalPriceInProductCurrency / rate);
+        let payCurrency = (req.body.currency || product.currency || "USD").toUpperCase();
+        if (!["USD", "LKR", "USDT", "TRX"].includes(payCurrency)) {
+          payCurrency = (product.currency || "USD").toUpperCase();
+        }
+        let deductAmount = totalPriceInUsdCents;
+        if (payCurrency !== "USD") {
+          const payCurrencySetting = await tx.query.settings.findFirst({
+            where: eq(settings.key, `CURRENCY_RATE_${payCurrency}`)
+          });
+          const payRate = payCurrencySetting ? parseFloat(payCurrencySetting.value) : 1;
+          deductAmount = Math.round(totalPriceInUsdCents / 100 * payRate * 100);
+        }
         const availableItems = await tx.select().from(credentials).where(and(eq(credentials.productId, productId), eq(credentials.status, "available"))).limit(quantity).for("update", { skipLocked: true });
         if (availableItems.length < quantity) {
           throw new Error(`Insufficient stock. Only ${availableItems.length} items available.`);
         }
         let updatedUser;
-        const currency = product.currency || "USD";
-        if (currency === "LKR") {
-          const totalPriceInLkrCents = Math.round(product.price * quantity);
-          [updatedUser] = await tx.update(telegramUsers).set({ balanceLkr: sql`${telegramUsers.balanceLkr} - ${totalPriceInLkrCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceLkr, totalPriceInLkrCents))).returning();
-        } else if (currency === "USDT") {
-          const totalPriceInUsdtCents = Math.round(product.price * quantity);
-          [updatedUser] = await tx.update(telegramUsers).set({ balanceUsdt: sql`${telegramUsers.balanceUsdt} - ${totalPriceInUsdtCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceUsdt, totalPriceInUsdtCents))).returning();
-        } else if (currency === "TRX") {
-          const totalPriceInTrxCents = Math.round(product.price * quantity);
-          [updatedUser] = await tx.update(telegramUsers).set({ balanceTrx: sql`${telegramUsers.balanceTrx} - ${totalPriceInTrxCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceTrx, totalPriceInTrxCents))).returning();
+        if (payCurrency === "LKR") {
+          [updatedUser] = await tx.update(telegramUsers).set({ balanceLkr: sql`${telegramUsers.balanceLkr} - ${deductAmount}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceLkr, deductAmount))).returning();
+        } else if (payCurrency === "USDT") {
+          [updatedUser] = await tx.update(telegramUsers).set({ balanceUsdt: sql`${telegramUsers.balanceUsdt} - ${deductAmount}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceUsdt, deductAmount))).returning();
+        } else if (payCurrency === "TRX") {
+          [updatedUser] = await tx.update(telegramUsers).set({ balanceTrx: sql`${telegramUsers.balanceTrx} - ${deductAmount}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceTrx, deductAmount))).returning();
         } else {
-          [updatedUser] = await tx.update(telegramUsers).set({ balance: sql`${telegramUsers.balance} - ${totalPriceInUsdCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, totalPriceInUsdCents))).returning();
+          [updatedUser] = await tx.update(telegramUsers).set({ balance: sql`${telegramUsers.balance} - ${deductAmount}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, deductAmount))).returning();
         }
         if (!updatedUser) {
-          throw new Error("Insufficient balance");
+          throw new Error(`Insufficient balance in ${payCurrency}.`);
         }
         const itemIds = availableItems.map((item) => item.id);
         await tx.update(credentials).set({ status: "sold" }).where(inArray(credentials.id, itemIds));
@@ -97434,21 +97446,29 @@ Thank you for shopping with us! <tg-emoji emoji-id="5456343263340405032">\u{1F6C
         });
         const rate = currencySetting ? parseFloat(currencySetting.value) : 1;
         const priceInUsdCents = Math.round(offer.price / rate);
-        let updatedUser;
-        const currency = offer.product?.currency || "USD";
-        if (currency === "LKR") {
-          const priceInLkrCents = offer.price;
-          [updatedUser] = await tx.update(telegramUsers).set({ balanceLkr: sql`${telegramUsers.balanceLkr} - ${priceInLkrCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceLkr, priceInLkrCents))).returning();
-        } else if (currency === "USDT") {
-          const priceInUsdtCents = offer.price;
-          [updatedUser] = await tx.update(telegramUsers).set({ balanceUsdt: sql`${telegramUsers.balanceUsdt} - ${priceInUsdtCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceUsdt, priceInUsdtCents))).returning();
-        } else if (currency === "TRX") {
-          const priceInTrxCents = offer.price;
-          [updatedUser] = await tx.update(telegramUsers).set({ balanceTrx: sql`${telegramUsers.balanceTrx} - ${priceInTrxCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceTrx, priceInTrxCents))).returning();
-        } else {
-          [updatedUser] = await tx.update(telegramUsers).set({ balance: sql`${telegramUsers.balance} - ${priceInUsdCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, priceInUsdCents))).returning();
+        let payCurrency = (req.body.currency || productCurrency || "USD").toUpperCase();
+        if (!["USD", "LKR", "USDT", "TRX"].includes(payCurrency)) {
+          payCurrency = productCurrency.toUpperCase();
         }
-        if (!updatedUser) throw new Error("Insufficient balance");
+        let deductAmount = priceInUsdCents;
+        if (payCurrency !== "USD") {
+          const payCurrencySetting = await tx.query.settings.findFirst({
+            where: eq(settings.key, `CURRENCY_RATE_${payCurrency}`)
+          });
+          const payRate = payCurrencySetting ? parseFloat(payCurrencySetting.value) : 1;
+          deductAmount = Math.round(priceInUsdCents / 100 * payRate * 100);
+        }
+        let updatedUser;
+        if (payCurrency === "LKR") {
+          [updatedUser] = await tx.update(telegramUsers).set({ balanceLkr: sql`${telegramUsers.balanceLkr} - ${deductAmount}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceLkr, deductAmount))).returning();
+        } else if (payCurrency === "USDT") {
+          [updatedUser] = await tx.update(telegramUsers).set({ balanceUsdt: sql`${telegramUsers.balanceUsdt} - ${deductAmount}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceUsdt, deductAmount))).returning();
+        } else if (payCurrency === "TRX") {
+          [updatedUser] = await tx.update(telegramUsers).set({ balanceTrx: sql`${telegramUsers.balanceTrx} - ${deductAmount}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balanceTrx, deductAmount))).returning();
+        } else {
+          [updatedUser] = await tx.update(telegramUsers).set({ balance: sql`${telegramUsers.balance} - ${deductAmount}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, deductAmount))).returning();
+        }
+        if (!updatedUser) throw new Error(`Insufficient balance in ${payCurrency}.`);
         const availableItems = await tx.select().from(credentials).where(and(eq(credentials.productId, offer.productId), eq(credentials.status, "available"))).limit(offer.bundleQuantity).for("update", { skipLocked: true });
         if (availableItems.length < offer.bundleQuantity) {
           throw new Error("Insufficient stock for this bundle");
