@@ -910,8 +910,89 @@ export async function registerRoutes(
   });
 
   /**
+   * Google Cloud Vertex AI Auth and Execution Helpers
+   */
+  const getVertexAccessToken = async (serviceAccount: any): Promise<string> => {
+    const jwtHeader = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
+    const now = Math.floor(Date.now() / 1000);
+    const jwtClaimSet = Buffer.from(JSON.stringify({
+      iss: serviceAccount.client_email,
+      scope: "https://www.googleapis.com/auth/cloud-platform",
+      aud: serviceAccount.token_uri,
+      exp: now + 3600,
+      iat: now
+    })).toString("base64url");
+
+    const sign = crypto.createSign("RSA-SHA256");
+    sign.update(`${jwtHeader}.${jwtClaimSet}`);
+    const signature = sign.sign(serviceAccount.private_key, "base64url");
+    const jwt = `${jwtHeader}.${jwtClaimSet}.${signature}`;
+
+    const response = await axios.post(serviceAccount.token_uri, new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: jwt
+    }), {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" }
+    });
+
+    return response.data.access_token;
+  };
+
+  const callVertexAI = async (serviceAccount: any, systemPrompt: string, incomingMessages: any[]): Promise<string> => {
+    const token = await getVertexAccessToken(serviceAccount);
+    const projectId = serviceAccount.project_id;
+    const location = "us-central1";
+    const modelId = "gemini-1.5-flash-001";
+
+    const mapped = incomingMessages.map(msg => ({
+      role: msg.role === "user" ? "user" : "model",
+      parts: [{ text: msg.content ? msg.content.trim() : "" }]
+    })).filter(msg => msg.parts[0].text.length > 0);
+
+    if (mapped.length === 0) return "";
+
+    // Merge consecutive messages with the same role
+    const merged: typeof mapped = [];
+    for (const msg of mapped) {
+      if (merged.length > 0 && merged[merged.length - 1].role === msg.role) {
+        merged[merged.length - 1].parts[0].text += "\n" + msg.parts[0].text;
+      } else {
+        merged.push(msg);
+      }
+    }
+
+    // Ensure the list starts with a 'user' message
+    while (merged.length > 0 && merged[0].role !== "user") {
+      merged.shift();
+    }
+
+    if (merged.length === 0) return "";
+
+    const url = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelId}:generateContent`;
+
+    const response = await axios.post(
+      url,
+      {
+        contents: merged,
+        systemInstruction: {
+          parts: [{ text: systemPrompt }]
+        }
+      },
+      {
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        timeout: 20000,
+      }
+    );
+
+    return response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  };
+
+  /**
    * AI Chat Proxy
-   * Proxies support chat messages to the Google AI Studio Gemini API with full shop context.
+   * Proxies support chat messages to Gemini, OpenAI or Google Cloud Vertex AI with full shop context.
    */
   app.post("/api/support/chat", chatLimiter, async (req, res) => {
     const { messages, message } = req.body;
@@ -966,13 +1047,23 @@ export async function registerRoutes(
       const openaiModel = openaiModelSetting?.value || "gpt-4o-mini";
       const aiProviderPriority = aiProviderPrioritySetting?.value || "gemini";
 
+      let vertexServiceAccount: any = null;
+      try {
+        const vertexKeySetting = await storage.getSetting("GOOGLE_VERTEX_KEY");
+        if (vertexKeySetting?.value) {
+          vertexServiceAccount = JSON.parse(vertexKeySetting.value);
+        }
+      } catch (e) {
+        console.error("Failed to parse GOOGLE_VERTEX_KEY:", e);
+      }
+
       const geminiKeys = geminiApiKey
         .split(/[\s,;\n\r]+/)
         .map(k => k.trim())
         .filter(k => k.length > 0);
 
-      if (geminiKeys.length === 0 && !openaiApiKey) {
-        return res.json({ answer: "⚠️ Live support assistant is offline. Please configure your Gemini API Key or OpenAI/DigitalOcean API Key in the settings panel." });
+      if (geminiKeys.length === 0 && !openaiApiKey && !vertexServiceAccount) {
+        return res.json({ answer: "⚠️ Live support assistant is offline. Please configure your Gemini API Key, Vertex AI Service Account or OpenAI/DigitalOcean API Key in the settings panel." });
       }
 
       // 2. Load shop products, special offers, FAQ, and branding for the AI context
@@ -1148,15 +1239,41 @@ export async function registerRoutes(
         return false;
       };
 
-      if (aiProviderPriority === "openai") {
-        const ok = await tryOpenAI();
+      const tryVertex = async () => {
+        if (!vertexServiceAccount) return false;
+        try {
+          console.log(`[AI Chat] Attempting Google Cloud Vertex AI (Project: ${vertexServiceAccount.project_id})`);
+          const text = await callVertexAI(vertexServiceAccount, systemPrompt, incomingMessages);
+          if (text) {
+            reply = text;
+            success = true;
+            return true;
+          }
+        } catch (err: any) {
+          const errorMsg = err.response ? JSON.stringify(err.response.data) : err.message;
+          console.error(`[AI Chat] Vertex AI failed:`, errorMsg);
+          errorsList.push(`Vertex AI: ${err.message}`);
+        }
+        return false;
+      };
+
+      if (aiProviderPriority === "vertex") {
+        let ok = await tryVertex();
         if (!ok) {
-          await tryGemini();
+          ok = await tryGemini();
+          if (!ok) await tryOpenAI();
+        }
+      } else if (aiProviderPriority === "openai") {
+        let ok = await tryOpenAI();
+        if (!ok) {
+          ok = await tryGemini();
+          if (!ok) await tryVertex();
         }
       } else {
-        const ok = await tryGemini();
+        let ok = await tryGemini();
         if (!ok) {
-          await tryOpenAI();
+          ok = await tryOpenAI();
+          if (!ok) await tryVertex();
         }
       }
 
@@ -3727,7 +3844,8 @@ app.post("/api/settings", isAuth, async (req, res) => {
       "THEME_COLOR",
       "DIGITALOCEAN_API_KEY",
       "OPENVPN_DEFAULT_REGION",
-      "OPENVPN_DEFAULT_SIZE"
+      "OPENVPN_DEFAULT_SIZE",
+      "GOOGLE_VERTEX_KEY"
     ];
 
     if (!whitelistedKeys.includes(key)) {

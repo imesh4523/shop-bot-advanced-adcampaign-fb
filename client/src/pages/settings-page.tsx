@@ -41,6 +41,7 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const [token, setToken] = useState("");
   const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [vertexKey, setVertexKey] = useState("");
   const [openaiApiKey, setOpenaiApiKey] = useState("");
   const [openaiApiBase, setOpenaiApiBase] = useState("");
   const [openaiModel, setOpenaiModel] = useState("");
@@ -106,6 +107,10 @@ export default function SettingsPage() {
 
   const { data: geminiSetting, isLoading: isGeminiLoading } = useQuery<{ key: string, value: string }>({
     queryKey: ["/api/settings/GEMINI_API_KEY"],
+  });
+
+  const { data: vertexSetting } = useQuery<{ key: string, value: string }>({
+    queryKey: ["/api/settings/GOOGLE_VERTEX_KEY"],
   });
 
   const { data: openaiApiSetting } = useQuery<{ key: string, value: string }>({
@@ -409,6 +414,10 @@ export default function SettingsPage() {
   }, [geminiSetting]);
 
   useEffect(() => {
+    if (vertexSetting?.value !== undefined) setVertexKey(vertexSetting.value);
+  }, [vertexSetting]);
+
+  useEffect(() => {
     if (openaiApiSetting?.value !== undefined) setOpenaiApiKey(openaiApiSetting.value);
   }, [openaiApiSetting]);
 
@@ -666,6 +675,23 @@ export default function SettingsPage() {
       toast({
         title: "Gemini API Key Updated",
         description: "Live support chat bot is now using the updated Gemini API key.",
+      });
+    }
+  });
+
+  const vertexMutation = useMutation({
+    mutationFn: async (value: string) => {
+      const res = await apiRequest("POST", "/api/settings", {
+        key: "GOOGLE_VERTEX_KEY",
+        value
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/GOOGLE_VERTEX_KEY"] });
+      toast({
+        title: "Vertex AI Config Updated",
+        description: "Live support chat bot is now using the updated Google Cloud Vertex AI configuration.",
       });
     }
   });
@@ -1255,6 +1281,35 @@ export default function SettingsPage() {
 
             <div className="h-px bg-white/5 my-6" />
 
+            {/* Vertex AI Section */}
+            <div className="space-y-2">
+              <Label htmlFor="vertexKey" className="text-sm font-bold text-white/70 uppercase tracking-widest flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-purple-400" />
+                Google Cloud Vertex AI (Service Account JSON)
+              </Label>
+              <CardDescription className="text-white/40">
+                Paste your Google Cloud IAM Service Account Credentials JSON here to connect Vertex AI (Gemini model).
+              </CardDescription>
+              <div className="flex gap-3">
+                <Textarea
+                  id="vertexKey"
+                  placeholder='{"type": "service_account", "project_id": "...", ...}'
+                  className="glass-panel border-white/10 bg-purple-950/20 text-white min-h-[120px] rounded-xl focus:border-purple-500/50 transition-all font-mono text-xs"
+                  value={vertexKey}
+                  onChange={(e) => setVertexKey(e.target.value)}
+                />
+                <Button
+                  onClick={() => vertexMutation.mutate(vertexKey)}
+                  disabled={vertexMutation.isPending}
+                  className="h-12 self-end px-6 rounded-xl bg-gradient-to-r from-purple-500 to-blue-600 hover:from-purple-600 hover:to-blue-700 font-bold"
+                >
+                  {vertexMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                </Button>
+              </div>
+            </div>
+
+            <div className="h-px bg-white/5 my-6" />
+
             {/* OpenAI / DigitalOcean AI Section */}
             <div className="space-y-4">
               <Label className="text-sm font-bold text-white/70 uppercase tracking-widest flex items-center gap-2">
@@ -1276,8 +1331,9 @@ export default function SettingsPage() {
                       value={aiProviderPriority}
                       onChange={(e) => setAiProviderPriority(e.target.value)}
                     >
-                      <option value="gemini">Prefer Gemini first (Fallback to OpenAI/DigitalOcean)</option>
-                      <option value="openai">Prefer OpenAI/DigitalOcean first (Fallback to Gemini)</option>
+                      <option value="gemini">Prefer Gemini AI Studio first</option>
+                      <option value="vertex">Prefer Google Cloud Vertex AI first</option>
+                      <option value="openai">Prefer OpenAI/DigitalOcean first</option>
                     </select>
                     <Button
                       onClick={() => brandingMutation.mutate({ key: "AI_PROVIDER_PRIORITY", value: aiProviderPriority })}

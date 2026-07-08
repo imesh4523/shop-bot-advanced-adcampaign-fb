@@ -945,6 +945,8 @@ export default function MiniAppShop() {
   const googleEnabled = googleLoginEnabledSetting?.value === "true";
   const googleClientId = googleClientIdSetting?.value ? googleClientIdSetting.value.trim() : null;
 
+  const isGuest = user?.telegramId?.startsWith("web_guest_");
+
   useEffect(() => {
     if (!googleEnabled || !googleClientId) return;
 
@@ -1875,8 +1877,6 @@ export default function MiniAppShop() {
       </div>
     );
   }
-
-  const isGuest = user?.telegramId?.startsWith("web_guest_");
 
   return (
     <div className="tg-mini-app min-h-screen text-neutral-900 dark:text-foreground font-sans selection:bg-purple-200 pb-32" style={{ background: 'inherit' }}>
