@@ -3096,7 +3096,7 @@ app.get("/api/auth/user", async (req, res) => {
   if (!req.session.userId) return res.status(401).json({ message: "Not logged in" });
   const user = await storage.getUser(req.session.userId);
   if (!user) return res.status(401).json({ message: "User not found" });
-  res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, avatarUrl: user.avatarUrl });
+  res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, avatarUrl: user.avatarUrl, passkeyCredential: user.passkeyCredential });
 });
 
 app.get(api.products.list.path, isAuth, async (req, res) => {

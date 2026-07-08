@@ -40,11 +40,6 @@ export default function LoginPage() {
 
   const handlePasskeyLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!emailInput) {
-      toast({ title: "Email Required", description: "Please enter your administrator email first.", variant: "destructive" });
-      return;
-    }
-
     setIsPasskeyAuthenticating(true);
     try {
       // 1. Fetch challenge from server
@@ -69,6 +64,12 @@ export default function LoginPage() {
       }
 
       const authResponse = assertion.response as AuthenticatorAssertionResponse;
+      const userHandle = authResponse.userHandle;
+      const email = userHandle ? new TextDecoder().decode(userHandle) : emailInput;
+
+      if (!email) {
+        throw new Error("Could not identify account email from this passkey. Please register again.");
+      }
 
       // 3. Hex encode parameters to verify securely on server
       const clientDataJSONHex = Array.from(new Uint8Array(authResponse.clientDataJSON))
@@ -85,7 +86,7 @@ export default function LoginPage() {
 
       // 4. Verify assertion on server
       const verifyRes = await apiRequest("POST", "/api/auth/passkey-verify", {
-        email: emailInput,
+        email: email,
         credentialId: assertion.id,
         clientDataJSONHex,
         authenticatorDataHex,
@@ -233,18 +234,13 @@ export default function LoginPage() {
                   >
                     {forcePasskeyOnly ? (
                       <form onSubmit={handlePasskeyLogin} className="w-full space-y-6">
-                        <div className="space-y-2">
-                          <Label className="text-xs font-bold uppercase tracking-widest text-white/50 ml-1">Admin Email</Label>
-                          <div className="relative group">
-                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 group-focus-within:text-primary transition-colors" />
-                            <Input 
-                              type="email"
-                              placeholder="admin@cloudshop.io" 
-                              className="h-14 pl-12 bg-white/[0.03] border-white/10 focus:border-primary/50 focus:ring-primary/20 rounded-2xl transition-all text-white"
-                              value={emailInput}
-                              onChange={(e) => setEmailInput(e.target.value)}
-                            />
+                        <div className="flex flex-col items-center justify-center p-8 bg-white/[0.02] border border-white/5 rounded-3xl space-y-4">
+                          <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-full animate-pulse text-purple-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-key-round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 1 1-1v-1a1 1 0 0 0 .586-.172l1.9-1.9a7.5 7.5 0 1 0-5.83-5.83l-4.24 4.24a2 2 0 0 0-.586 1.414Z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>
                           </div>
+                          <p className="text-xs text-white/40 text-center max-w-[240px]">
+                            Biometric login enforced. Securely sign in using your device passkey (Face ID / Touch ID / PIN).
+                          </p>
                         </div>
                         <Button 
                           type="submit"
@@ -330,20 +326,7 @@ export default function LoginPage() {
                           <div className="flex-grow border-t border-white/5"></div>
                         </div>
 
-                        <form onSubmit={handlePasskeyLogin} className="w-full space-y-4">
-                          <div className="space-y-2">
-                            <Label className="text-xs font-bold uppercase tracking-widest text-white/30 ml-1">Admin Email</Label>
-                            <div className="relative group">
-                              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 group-focus-within:text-primary transition-colors" />
-                              <Input 
-                                type="email"
-                                placeholder="admin@cloudshop.io" 
-                                className="h-12 pl-12 bg-white/[0.02] border-white/5 focus:border-primary/50 focus:ring-primary/20 rounded-2xl transition-all text-white text-sm"
-                                value={emailInput}
-                                onChange={(e) => setEmailInput(e.target.value)}
-                              />
-                            </div>
-                          </div>
+                        <form onSubmit={handlePasskeyLogin} className="w-full">
                           <Button 
                             type="submit"
                             variant="outline"

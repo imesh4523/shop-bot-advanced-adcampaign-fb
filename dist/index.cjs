@@ -97920,7 +97920,7 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
     if (!req.session.userId) return res.status(401).json({ message: "Not logged in" });
     const user = await storage.getUser(req.session.userId);
     if (!user) return res.status(401).json({ message: "User not found" });
-    res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, avatarUrl: user.avatarUrl });
+    res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, avatarUrl: user.avatarUrl, passkeyCredential: user.passkeyCredential });
   });
   app2.get(api.products.list.path, isAuth, async (req, res) => {
     const productsList = await storage.getProducts();
