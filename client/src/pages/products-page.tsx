@@ -206,7 +206,9 @@ function CredentialsDialog({ product }: { product: Product }) {
 
 const formatProductPrice = (priceInCents: number, currency: string) => {
   const amount = priceInCents / 100;
-  if (currency === 'LKR') return `${amount.toFixed(0)} LKR`;
+  if (currency === 'LKR') return `Rs. ${amount.toFixed(2)}`;
+  if (currency === 'USDT') return `₮ ${amount.toFixed(2)}`;
+  if (currency === 'TRX') return `${amount.toFixed(2)} TRX`;
   if (currency === 'INR') return `₹${amount.toFixed(2)}`;
   if (currency === 'EUR') return `€${amount.toFixed(2)}`;
   return `$${amount.toFixed(2)}`;
@@ -632,8 +634,8 @@ function EditProductDialog({
                       <SelectContent className="glass-panel border-white/10 bg-background text-white rounded-xl">
                         <SelectItem value="USD">USD ($)</SelectItem>
                         <SelectItem value="LKR">LKR (Rs)</SelectItem>
-                        <SelectItem value="INR">INR (₹)</SelectItem>
-                        <SelectItem value="EUR">EUR (€)</SelectItem>
+                        <SelectItem value="USDT">USDT (₮)</SelectItem>
+                        <SelectItem value="TRX">TRX (TRX)</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage className="text-red-400 font-bold text-xs" />
@@ -905,8 +907,8 @@ function CreateProductDialog({ open, onOpenChange }: { open: boolean, onOpenChan
                       <SelectContent className="glass-panel border-white/10 bg-background text-white rounded-xl">
                         <SelectItem value="USD">USD ($)</SelectItem>
                         <SelectItem value="LKR">LKR (Rs)</SelectItem>
-                        <SelectItem value="INR">INR (₹)</SelectItem>
-                        <SelectItem value="EUR">EUR (€)</SelectItem>
+                        <SelectItem value="USDT">USDT (₮)</SelectItem>
+                        <SelectItem value="TRX">TRX (TRX)</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage className="text-red-400 font-bold text-xs" />
