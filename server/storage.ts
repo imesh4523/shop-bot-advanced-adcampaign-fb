@@ -161,7 +161,7 @@ export interface IStorage {
   // Support Messages
   saveSupportMessage(msg: InsertSupportMessage): Promise<SupportMessage>;
   getSupportMessages(telegramId?: string): Promise<SupportMessage[]>;
-  getSupportChats(): Promise<{ telegramId: string; username: string | null; firstName: string | null; lastName: string | null; lastMessage: string; lastMessageAt: Date; lastSender: string; pendingCount: number }[]>;
+  getSupportChats(): Promise<{ telegramId: string; username: string | null; firstName: string | null; lastName: string | null; lastMessage: string; lastMessageAt: Date; lastSender: string; pendingCount: number; avatarUrl: string | null }[]>;
 
   // Checked IPs
   getCheckedIps(): Promise<CheckedIp[]>;
@@ -859,7 +859,7 @@ export class DatabaseStorage implements IStorage {
     return await query.orderBy(supportMessages.createdAt);
   }
 
-  async getSupportChats(): Promise<{ telegramId: string; username: string | null; firstName: string | null; lastName: string | null; lastMessage: string; lastMessageAt: Date; lastSender: string; pendingCount: number }[]> {
+  async getSupportChats(): Promise<{ telegramId: string; username: string | null; firstName: string | null; lastName: string | null; lastMessage: string; lastMessageAt: Date; lastSender: string; pendingCount: number; avatarUrl: string | null }[]> {
     const messages = await db.select().from(supportMessages).orderBy(desc(supportMessages.createdAt));
     
     // Group messages by telegramId (maintaining desc order)
@@ -885,6 +885,10 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
+      // Fetch the telegram user for this telegramId to retrieve their avatarUrl
+      const [userRecord] = await db.select().from(telegramUsers).where(eq(telegramUsers.telegramId, telegramId));
+      const avatarUrl = userRecord?.avatarUrl || null;
+
       chatsList.push({
         telegramId,
         username: lastMsg.username,
@@ -893,7 +897,8 @@ export class DatabaseStorage implements IStorage {
         lastMessage: lastMsg.message,
         lastMessageAt: lastMsg.createdAt,
         lastSender: lastMsg.sender,
-        pendingCount
+        pendingCount,
+        avatarUrl
       });
     }
 

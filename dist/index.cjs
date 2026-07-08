@@ -55849,6 +55849,8 @@ var init_storage = __esm({
               break;
             }
           }
+          const [userRecord] = await db.select().from(telegramUsers).where(eq(telegramUsers.telegramId, telegramId));
+          const avatarUrl = userRecord?.avatarUrl || null;
           chatsList.push({
             telegramId,
             username: lastMsg.username,
@@ -55857,7 +55859,8 @@ var init_storage = __esm({
             lastMessage: lastMsg.message,
             lastMessageAt: lastMsg.createdAt,
             lastSender: lastMsg.sender,
-            pendingCount
+            pendingCount,
+            avatarUrl
           });
         }
         return chatsList.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());

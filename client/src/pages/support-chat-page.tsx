@@ -42,6 +42,9 @@ interface SupportChat {
   lastName: string | null;
   lastMessage: string;
   lastMessageAt: string;
+  pendingCount: number;
+  avatarUrl: string | null;
+  lastSender: string;
 }
 
 interface SupportMessage {
@@ -106,6 +109,11 @@ export default function SupportChatPage() {
   // 1. Fetch support chats list (4s interval to guarantee fresh fallback updates)
   const { data: chats = [], isLoading: isChatsLoading } = useQuery<SupportChat[]>({
     queryKey: ["/api/support/chats"],
+    queryFn: async () => {
+      const res = await fetch("/api/support/chats");
+      if (!res.ok) throw new Error("Failed to fetch chats");
+      return res.json();
+    },
     refetchInterval: 4000, 
   });
 
@@ -178,14 +186,25 @@ export default function SupportChatPage() {
       queryClient.setQueryData<SupportChat[]>(["/api/support/chats"], (oldChats = []) => {
         const chatsCopy = [...oldChats];
         const existingIdx = chatsCopy.findIndex(c => c.telegramId === msg.telegramId);
-        
+        const existingChat = existingIdx > -1 ? chatsCopy[existingIdx] : null;
+
+        let newPendingCount = existingChat ? existingChat.pendingCount : 0;
+        if (msg.sender === 'user') {
+          newPendingCount += 1;
+        } else {
+          newPendingCount = 0;
+        }
+
         const updatedChat: SupportChat = {
           telegramId: msg.telegramId,
-          username: msg.username,
-          firstName: msg.firstName,
-          lastName: msg.lastName,
+          username: msg.username || (existingChat ? existingChat.username : null),
+          firstName: msg.firstName || (existingChat ? existingChat.firstName : null),
+          lastName: msg.lastName || (existingChat ? existingChat.lastName : null),
           lastMessage: msg.message,
-          lastMessageAt: msg.createdAt
+          lastMessageAt: msg.createdAt,
+          lastSender: msg.sender,
+          pendingCount: newPendingCount,
+          avatarUrl: existingChat ? existingChat.avatarUrl : null
         };
 
         if (existingIdx > -1) {
@@ -503,8 +522,14 @@ export default function SupportChatPage() {
                         onClick={() => setSelectedChatId(chat.telegramId)}
                         className="flex-1 p-4 flex gap-4 text-left items-start"
                       >
-                        <div className={`w-11 h-11 rounded-xl bg-gradient-to-tr ${getAvatarBg(chat)} flex items-center justify-center font-bold text-white shadow-md text-sm shrink-0`}>
-                          {getAvatarInitials(chat)}
+                        <div className="w-11 h-11 rounded-xl overflow-hidden bg-neutral-900 border border-white/10 shrink-0">
+                          {chat.avatarUrl ? (
+                            <img src={chat.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className={`w-full h-full bg-gradient-to-tr ${getAvatarBg(chat)} flex items-center justify-center font-bold text-white shadow-md text-sm`}>
+                              {getAvatarInitials(chat)}
+                            </div>
+                          )}
                         </div>
                         <div className="flex-1 min-w-0 pr-6">
                           <div className="flex justify-between items-baseline mb-1">
@@ -556,8 +581,14 @@ export default function SupportChatPage() {
               {/* Header */}
               <CardHeader className="p-5 border-b border-white/5 shrink-0 flex flex-row items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className={`w-11 h-11 rounded-xl bg-gradient-to-tr ${getAvatarBg(activeChat)} flex items-center justify-center font-bold text-white text-sm shadow`}>
-                    {getAvatarInitials(activeChat)}
+                  <div className="w-11 h-11 rounded-xl overflow-hidden bg-neutral-900 border border-white/10 shrink-0">
+                    {activeChat.avatarUrl ? (
+                      <img src={activeChat.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className={`w-full h-full bg-gradient-to-tr ${getAvatarBg(activeChat)} flex items-center justify-center font-bold text-white text-sm shadow`}>
+                        {getAvatarInitials(activeChat)}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <CardTitle className="text-lg font-extrabold text-white">
