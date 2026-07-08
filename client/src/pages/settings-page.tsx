@@ -65,6 +65,7 @@ export default function SettingsPage() {
   const [supportUsername, setSupportUsername] = useState("");
   const [supportBtnText, setSupportBtnText] = useState("");
   const [loadingText, setLoadingText] = useState("");
+  const [defaultTheme, setDefaultTheme] = useState("dark");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [vapidPublicKey, setVapidPublicKey] = useState("");
@@ -361,6 +362,10 @@ export default function SettingsPage() {
     queryKey: ["/api/settings/LOADING_TEXT"],
   });
 
+  const { data: defaultThemeSetting } = useQuery<{ key: string, value: string }>({
+    queryKey: ["/api/settings/DEFAULT_THEME"],
+  });
+
   const { data: vapidPublicSetting, isLoading: isVapidPublicLoading } = useQuery<{ key: string, value: string }>({
     queryKey: ["/api/settings/VAPID_PUBLIC_KEY"],
   });
@@ -623,6 +628,10 @@ export default function SettingsPage() {
   useEffect(() => {
     if (loadingTextSetting?.value !== undefined) setLoadingText(loadingTextSetting.value);
   }, [loadingTextSetting]);
+
+  useEffect(() => {
+    if (defaultThemeSetting?.value !== undefined) setDefaultTheme(defaultThemeSetting.value || "dark");
+  }, [defaultThemeSetting]);
 
   useEffect(() => {
     if (vapidPublicSetting?.value !== undefined) setVapidPublicKey(vapidPublicSetting.value);
@@ -2150,6 +2159,28 @@ export default function SettingsPage() {
                 />
                 <Button
                   onClick={() => brandingMutation.mutate({ key: "LOADING_TEXT", value: loadingText })}
+                  disabled={brandingMutation.isPending}
+                  className="h-12 px-4 rounded-xl bg-gradient-to-r from-purple-500 to-blue-600 font-bold"
+                >
+                  {brandingMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-4 border-t border-white/5">
+              <Label className="text-sm font-bold text-white/70 uppercase tracking-widest">Default Interface Theme (First Visit)</Label>
+              <div className="flex gap-3">
+                <select
+                  className="flex-1 glass-panel border-white/10 bg-purple-950/20 text-white h-12 px-3 rounded-xl focus:border-purple-500/50 transition-all outline-none"
+                  value={defaultTheme}
+                  onChange={(e) => setDefaultTheme(e.target.value)}
+                >
+                  <option value="dark" className="bg-purple-950 text-white">Dark Theme (Black)</option>
+                  <option value="light" className="bg-purple-950 text-white">Light Theme (White)</option>
+                  <option value="system" className="bg-purple-950 text-white">System Preference</option>
+                </select>
+                <Button
+                  onClick={() => brandingMutation.mutate({ key: "DEFAULT_THEME", value: defaultTheme })}
                   disabled={brandingMutation.isPending}
                   className="h-12 px-4 rounded-xl bg-gradient-to-r from-purple-500 to-blue-600 font-bold"
                 >

@@ -405,7 +405,7 @@ function hexToHsl(hex: string): string {
 }
 
 export default function MiniAppShop() {
-  const { theme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const { toast } = useToast();
   const { data: user, isLoading: userLoading } = useQuery<TelegramUser>({
     queryKey: ["/api/mini/user"],
@@ -1203,7 +1203,16 @@ export default function MiniAppShop() {
     staleTime: 0,
   });
 
+  const { data: defaultThemeSetting } = useQuery<{ value: string }>({
+    queryKey: ["/api/settings/DEFAULT_THEME"],
+    staleTime: 0,
+  });
 
+  useEffect(() => {
+    if (!localStorage.getItem("vite-ui-theme") && defaultThemeSetting?.value) {
+      setTheme(defaultThemeSetting.value as any);
+    }
+  }, [defaultThemeSetting, setTheme]);
 
   const googleEnabled = googleLoginEnabledSetting?.value === "true";
   const googleClientId = googleClientIdSetting?.value ? googleClientIdSetting.value.trim() : null;
@@ -2499,7 +2508,7 @@ export default function MiniAppShop() {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="absolute bottom-16 right-0 w-[320px] max-h-[450px] bg-[#1a1625]/95 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+              className="absolute bottom-16 right-0 w-[320px] h-[420px] bg-[#1a1625]/95 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl flex flex-col overflow-hidden"
             >
               {/* Chat Header */}
               <div className="p-4 bg-white/5 border-b border-white/10 flex items-center justify-between">
