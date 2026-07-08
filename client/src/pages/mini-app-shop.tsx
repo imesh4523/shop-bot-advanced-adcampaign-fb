@@ -954,50 +954,62 @@ export default function MiniAppShop() {
   // Branding Settings
   const { data: storeNameSetting } = useQuery<{ value: string }>({
     queryKey: ["/api/settings/STORE_NAME"],
+    staleTime: 0,
   });
 
   const { data: supportUsernameSetting } = useQuery<{ value: string }>({
     queryKey: ["/api/settings/SUPPORT_USERNAME"],
+    staleTime: 0,
   });
 
   const { data: supportBtnTextSetting } = useQuery<{ value: string }>({
     queryKey: ["/api/settings/SUPPORT_BTN_TEXT"],
+    staleTime: 0,
   });
 
   const { data: loadingTextSetting } = useQuery<{ value: string }>({
     queryKey: ["/api/settings/LOADING_TEXT"],
+    staleTime: 0,
   });
 
   const { data: minDepositSetting } = useQuery<{ value: string }>({
     queryKey: ["/api/settings/MIN_DEPOSIT_LIMIT"],
+    staleTime: 0,
   });
 
   const { data: trc20WalletSetting } = useQuery<{ value: string }>({
     queryKey: ["/api/settings/TRC20_WALLET_ADDRESS"],
+    staleTime: 0,
   });
 
   const { data: aptosWalletSetting } = useQuery<{ value: string }>({
     queryKey: ["/api/settings/APTOS_WALLET_ADDRESS"],
+    staleTime: 0,
   });
 
   const { data: binancePayIdSetting } = useQuery<{ value: string }>({
     queryKey: ["/api/settings/BINANCE_PAY_ID"],
+    staleTime: 0,
   });
 
   const { data: bannerImagesSetting } = useQuery<{ value: string }>({
     queryKey: ["/api/settings/BANNER_IMAGES"],
+    staleTime: 0,
   });
 
   const { data: themeColorSetting } = useQuery<{ value: string }>({
     queryKey: ["/api/settings/THEME_COLOR"],
+    staleTime: 0,
   });
 
   const { data: googleLoginEnabledSetting } = useQuery<{ value: string }>({
     queryKey: ["/api/settings/GOOGLE_LOGIN_ENABLED"],
+    staleTime: 0,
   });
 
   const { data: googleClientIdSetting } = useQuery<{ value: string }>({
     queryKey: ["/api/settings/GOOGLE_CLIENT_ID"],
+    staleTime: 0,
   });
 
   const googleEnabled = googleLoginEnabledSetting?.value === "true";
