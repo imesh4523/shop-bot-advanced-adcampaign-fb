@@ -4210,7 +4210,9 @@ app.post("/api/settings", isAuth, async (req, res) => {
       "OPENVPN_DEFAULT_REGION",
       "OPENVPN_DEFAULT_SIZE",
       "GOOGLE_VERTEX_KEY",
-      "CATEGORY_ORDER"
+      "CATEGORY_ORDER",
+      "STRIPE_ENABLED",
+      "DEFAULT_THEME"
     ];
 
     if (!whitelistedKeys.includes(key)) {

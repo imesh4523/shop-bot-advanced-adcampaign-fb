@@ -55388,7 +55388,8 @@ var init_storage = __esm({
           { key: "TRC20_VERIFICATION_MODE", value: "binance" },
           { key: "APTOS_VERIFICATION_MODE", value: "binance" },
           { key: "MIN_DEPOSIT_LIMIT", value: "1.00" },
-          { key: "DEFAULT_THEME", value: "dark" }
+          { key: "DEFAULT_THEME", value: "dark" },
+          { key: "STRIPE_ENABLED", value: "true" }
         ];
         for (const s of defaultSettings) {
           const existing = await db.select().from(settings).where(eq(settings.key, s.key));
@@ -98923,7 +98924,9 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
         "OPENVPN_DEFAULT_REGION",
         "OPENVPN_DEFAULT_SIZE",
         "GOOGLE_VERTEX_KEY",
-        "CATEGORY_ORDER"
+        "CATEGORY_ORDER",
+        "STRIPE_ENABLED",
+        "DEFAULT_THEME"
       ];
       if (!whitelistedKeys.includes(key)) {
         return res.status(403).json({ message: "Modifying this key is restricted" });

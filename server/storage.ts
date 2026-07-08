@@ -238,7 +238,8 @@ export class DatabaseStorage implements IStorage {
       { key: "TRC20_VERIFICATION_MODE", value: "binance" },
       { key: "APTOS_VERIFICATION_MODE", value: "binance" },
       { key: "MIN_DEPOSIT_LIMIT", value: "1.00" },
-      { key: "DEFAULT_THEME", value: "dark" }
+      { key: "DEFAULT_THEME", value: "dark" },
+      { key: "STRIPE_ENABLED", value: "true" }
     ];
 
     for (const s of defaultSettings) {
