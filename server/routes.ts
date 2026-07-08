@@ -4293,7 +4293,79 @@ app.get("/api/settings/:key", async (req, res, next) => {
   }
 });
 
-// Backup Routes
+// ──────────────────────────────────────────────────
+// Live Binance P2P Rate Endpoint (USDT ↔ LKR)
+// Caches result for 5 minutes to avoid hitting Binance rate limits
+// ──────────────────────────────────────────────────
+let p2pRateCache: { rate: number; fetchedAt: number } | null = null;
+const P2P_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+app.get("/api/mini/p2p-rate", async (req, res) => {
+  try {
+    const now = Date.now();
+    // Return cached rate if still fresh
+    if (p2pRateCache && now - p2pRateCache.fetchedAt < P2P_CACHE_TTL_MS) {
+      return res.json({ rate: p2pRateCache.rate, cached: true, fetchedAt: p2pRateCache.fetchedAt });
+    }
+
+    // Fetch fresh rate from Binance P2P API
+    const response = await fetch("https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      },
+      body: JSON.stringify({
+        fiat: "LKR",
+        page: 1,
+        rows: 5,
+        tradeType: "SELL",
+        asset: "USDT",
+        countries: [],
+        proMerchantAds: false,
+        shieldMerchantAds: false,
+        filterType: "all",
+        periods: [],
+        additionalKycVerifyFilter: 0,
+        publisherType: null,
+        payTypes: [],
+        classifies: ["mass", "profession"]
+      })
+    });
+
+    if (!response.ok) throw new Error(`Binance API returned ${response.status}`);
+
+    const data = await response.json() as any;
+    const ads = data?.data;
+    if (!ads || ads.length === 0) throw new Error("No P2P ads found");
+
+    // Calculate median price from top ads to avoid outliers
+    const prices = ads.map((a: any) => parseFloat(a.adv.price)).filter((p: number) => !isNaN(p));
+    const sorted = [...prices].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+
+    p2pRateCache = { rate: median, fetchedAt: now };
+    console.log(`[P2P Rate] Fetched USDT/LKR rate: ${median} (from ${prices.length} ads)`);
+
+    res.json({ rate: median, cached: false, fetchedAt: now });
+  } catch (err: any) {
+    console.error("[P2P Rate] Failed to fetch Binance P2P rate:", err.message);
+    // Return cached rate even if expired, or fallback to stored setting
+    if (p2pRateCache) {
+      return res.json({ rate: p2pRateCache.rate, cached: true, stale: true, fetchedAt: p2pRateCache.fetchedAt });
+    }
+    // Last resort: read from settings
+    try {
+      const setting = await storage.getSetting("CURRENCY_RATE_LKR");
+      const fallbackRate = setting?.value ? parseFloat(setting.value) : 350;
+      return res.json({ rate: fallbackRate, cached: false, fallback: true });
+    } catch {
+      return res.json({ rate: 350, cached: false, fallback: true });
+    }
+  }
+});
+
+
 app.get("/api/backups/config", isAuth, async (req, res) => {
   const configs = await storage.getBackupConfigs();
   res.json(configs[0] || null);

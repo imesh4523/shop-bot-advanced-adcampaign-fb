@@ -398,8 +398,19 @@ export default function MiniAppShop() {
     queryKey: ["/api/settings/CURRENCY_RATE_LKR"]
   });
 
+  // Live Binance P2P rate — refreshed every 5 minutes via server cache
+  const { data: p2pRateData } = useQuery<{ rate: number; cached: boolean; fetchedAt?: number }>({
+    queryKey: ["/api/mini/p2p-rate"],
+    refetchInterval: 5 * 60 * 1000, // refetch every 5 min
+    staleTime: 4 * 60 * 1000,
+  });
+
+  // Live LKR rate: prefer real-time P2P rate, fallback to admin settings
+  const liveLkrRate = p2pRateData?.rate ||
+    (rateLkrSetting?.value ? parseFloat(rateLkrSetting.value) : 350);
+
   const getRate = (currency: string) => {
-    if (currency === 'LKR') return rateLkrSetting?.value ? parseFloat(rateLkrSetting.value) : 300;
+    if (currency === 'LKR') return liveLkrRate;
     if (currency === 'USDT') return 1.0;
     if (currency === 'TRX') return 8.0; // Default TRX rate
     return 1.0;
@@ -543,7 +554,7 @@ export default function MiniAppShop() {
       }
 
       const minDepositLimit = minDepositSetting?.value ? parseFloat(minDepositSetting.value) : 1.0;
-      const rateLkr = rateLkrSetting?.value ? parseFloat(rateLkrSetting.value) : 300;
+      const rateLkr = liveLkrRate;
       const actualMinDeposit = selectedDepositCurrency === 'LKR' ? minDepositLimit * rateLkr : minDepositLimit;
 
       if (amt < actualMinDeposit) {
@@ -2738,7 +2749,7 @@ export default function MiniAppShop() {
                     <span className="font-bold text-neutral-400 uppercase tracking-widest">Send Exactly:</span>
                     <span className="font-black text-neutral-900 dark:text-white">
                       {(() => {
-                        const rateLkr = rateLkrSetting?.value ? parseFloat(rateLkrSetting.value) : 15000;
+                        const rateLkr = liveLkrRate;
                         if (activeDeposit.method === 'binance' && selectedDepositCurrency === 'LKR') {
                           // Convert LKR → USDT at Binance P2P rate (rateLkr = LKR per 1 USDT)
                           const usdt = activeDeposit.amount / rateLkr;
@@ -2763,7 +2774,10 @@ export default function MiniAppShop() {
                   {activeDeposit.method === 'binance' && selectedDepositCurrency === 'LKR' && (
                     <div className="flex justify-between items-center text-[10px] text-neutral-400">
                       <span className="uppercase tracking-widest font-bold">Rate:</span>
-                      <span>1 USDT ≈ Rs. {rateLkrSetting?.value || '15000'} LKR</span>
+                      <span>1 USDT ≈ Rs. {liveLkrRate.toFixed(2)} LKR</span>
+                      {p2pRateData && !p2pRateData.cached && (
+                        <span className="ml-2 text-[9px] text-teal-400 font-bold uppercase">● Live</span>
+                      )}
                     </div>
                   )}
                   <div className="flex flex-col gap-1.5 pt-2 border-t border-purple-100/50 dark:border-white/5">
