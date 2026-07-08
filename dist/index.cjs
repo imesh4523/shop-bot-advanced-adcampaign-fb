@@ -97607,15 +97607,19 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
   });
   app2.post("/api/auth/passkey-register", isAuth, async (req, res) => {
     try {
-      const { publicKeyJwk } = req.body;
-      if (!publicKeyJwk || typeof publicKeyJwk !== "object") {
-        return res.status(400).json({ message: "Invalid public key" });
+      const { credentialId, publicKeyDerHex } = req.body;
+      if (!credentialId || !publicKeyDerHex) {
+        return res.status(400).json({ message: "Invalid parameters" });
       }
       if (!req.session.userId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
       const userId = req.session.userId;
-      await db.update(users2).set({ passkeyCredential: JSON.stringify(publicKeyJwk) }).where(eq(users2.id, userId));
+      const credentialData = {
+        credentialId,
+        publicKeyDerHex
+      };
+      await db.update(users2).set({ passkeyCredential: JSON.stringify(credentialData) }).where(eq(users2.id, userId));
       res.json({ success: true, message: "Passkey registered successfully!" });
     } catch (err) {
       console.error("Passkey registration failed:", err);
@@ -97632,9 +97636,9 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
     }
   });
   app2.post("/api/auth/passkey-verify", loginLimiter, async (req, res) => {
-    const { email, signatureHex } = req.body;
-    if (!email || !signatureHex) {
-      return res.status(400).json({ message: "Email and signature are required" });
+    const { email, credentialId, clientDataJSONHex, authenticatorDataHex, signatureHex } = req.body;
+    if (!email || !credentialId || !clientDataJSONHex || !authenticatorDataHex || !signatureHex) {
+      return res.status(400).json({ message: "Missing required parameters for authentication" });
     }
     try {
       const user = await storage.getUserByEmail(email);
@@ -97645,16 +97649,25 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
       if (!challenge) {
         return res.status(400).json({ message: "Challenge expired or invalid. Please try again." });
       }
-      const publicKeyJwk = JSON.parse(user.passkeyCredential);
+      const credentialData = JSON.parse(user.passkeyCredential);
+      if (credentialData.credentialId !== credentialId) {
+        return res.status(401).json({ message: "Passkey credential mismatch for this device" });
+      }
+      const clientDataJSONHash = import_crypto2.default.createHash("sha256").update(Buffer.from(clientDataJSONHex, "hex")).digest();
+      const authenticatorData = Buffer.from(authenticatorDataHex, "hex");
+      const signature = Buffer.from(signatureHex, "hex");
+      const verifyData = Buffer.concat([authenticatorData, clientDataJSONHash]);
+      const publicKeyDer = Buffer.from(credentialData.publicKeyDerHex, "hex");
       const pubKey = import_crypto2.default.createPublicKey({
-        key: publicKeyJwk,
-        format: "jwk"
+        key: publicKeyDer,
+        format: "der",
+        type: "spki"
       });
       const isVerified = import_crypto2.default.verify(
-        "sha256",
-        Buffer.from(challenge),
+        void 0,
+        verifyData,
         pubKey,
-        Buffer.from(signatureHex, "hex")
+        signature
       );
       if (!isVerified) {
         return res.status(401).json({ message: "Invalid passkey signature" });

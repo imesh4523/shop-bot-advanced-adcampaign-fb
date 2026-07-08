@@ -2690,9 +2690,9 @@ app.post("/api/login", loginLimiter, async (req, res) => {
 
 app.post("/api/auth/passkey-register", isAuth, async (req, res) => {
   try {
-    const { publicKeyJwk } = req.body;
-    if (!publicKeyJwk || typeof publicKeyJwk !== 'object') {
-      return res.status(400).json({ message: "Invalid public key" });
+    const { credentialId, publicKeyDerHex } = req.body;
+    if (!credentialId || !publicKeyDerHex) {
+      return res.status(400).json({ message: "Invalid parameters" });
     }
 
     if (!req.session.userId) {
@@ -2700,8 +2700,13 @@ app.post("/api/auth/passkey-register", isAuth, async (req, res) => {
     }
 
     const userId = req.session.userId;
+    const credentialData = {
+      credentialId,
+      publicKeyDerHex
+    };
+
     await db.update(users)
-      .set({ passkeyCredential: JSON.stringify(publicKeyJwk) })
+      .set({ passkeyCredential: JSON.stringify(credentialData) })
       .where(eq(users.id, userId));
 
     res.json({ success: true, message: "Passkey registered successfully!" });
@@ -2722,10 +2727,10 @@ app.get("/api/auth/passkey-challenge", async (req, res) => {
 });
 
 app.post("/api/auth/passkey-verify", loginLimiter, async (req, res) => {
-  const { email, signatureHex } = req.body;
+  const { email, credentialId, clientDataJSONHex, authenticatorDataHex, signatureHex } = req.body;
 
-  if (!email || !signatureHex) {
-    return res.status(400).json({ message: "Email and signature are required" });
+  if (!email || !credentialId || !clientDataJSONHex || !authenticatorDataHex || !signatureHex) {
+    return res.status(400).json({ message: "Missing required parameters for authentication" });
   }
 
   try {
@@ -2739,19 +2744,31 @@ app.post("/api/auth/passkey-verify", loginLimiter, async (req, res) => {
       return res.status(400).json({ message: "Challenge expired or invalid. Please try again." });
     }
 
-    const publicKeyJwk = JSON.parse(user.passkeyCredential);
+    const credentialData = JSON.parse(user.passkeyCredential);
 
-    // Import JWK key using crypto
+    // Verify credential ID matches
+    if (credentialData.credentialId !== credentialId) {
+      return res.status(401).json({ message: "Passkey credential mismatch for this device" });
+    }
+
+    const clientDataJSONHash = crypto.createHash("sha256").update(Buffer.from(clientDataJSONHex, "hex")).digest();
+    const authenticatorData = Buffer.from(authenticatorDataHex, "hex");
+    const signature = Buffer.from(signatureHex, "hex");
+
+    const verifyData = Buffer.concat([authenticatorData, clientDataJSONHash]);
+    const publicKeyDer = Buffer.from(credentialData.publicKeyDerHex, "hex");
+
     const pubKey = crypto.createPublicKey({
-      key: publicKeyJwk,
-      format: 'jwk'
+      key: publicKeyDer,
+      format: 'der',
+      type: 'spki'
     });
 
     const isVerified = crypto.verify(
-      "sha256",
-      Buffer.from(challenge),
+      undefined,
+      verifyData,
       pubKey,
-      Buffer.from(signatureHex, "hex")
+      signature
     );
 
     if (!isVerified) {

@@ -117,53 +117,79 @@ export default function SettingsPage() {
 
     setIsPasskeyRegistering(true);
     try {
-      const keyPair = await window.crypto.subtle.generateKey(
-        {
-          name: "RSASSA-PKCS1-v1_5",
-          modulusLength: 2048,
-          publicExponent: new Uint8Array([1, 0, 1]),
-          hash: "SHA-256",
-        },
-        true,
-        ["sign", "verify"]
+      // 1. Fetch challenge from server
+      const challengeRes = await apiRequest("GET", "/api/auth/passkey-challenge");
+      const { challenge } = await challengeRes.json();
+
+      // Convert challenge hex string to Uint8Array
+      const challengeBuffer = new Uint8Array(
+        challenge.match(/.{1,2}/g).map((byte: string) => parseInt(byte, 16))
       );
 
-      const publicKeyJwk = await window.crypto.subtle.exportKey("jwk", keyPair.publicKey);
+      // Convert user email to dynamic ID buffer
+      const userIdBuffer = new TextEncoder().encode(user.email);
 
+      // 2. Call standard native WebAuthn API (triggers FaceID/TouchID prompt on Apple/Android)
+      const credential = await navigator.credentials.create({
+        publicKey: {
+          challenge: challengeBuffer,
+          rp: {
+            name: "Shopeefy Admin Portal",
+            id: window.location.hostname, // Matches domain (e.g. localhost or cloudaccount.store)
+          },
+          user: {
+            id: userIdBuffer,
+            name: user.email,
+            displayName: `${user.firstName || "Admin"} (${user.email})`,
+          },
+          pubKeyCredParams: [
+            { type: "public-key", alg: -7 },   // ES256 (standard EC WebAuthn)
+            { type: "public-key", alg: -257 }  // RS256
+          ],
+          authenticatorSelection: {
+            authenticatorAttachment: "platform", // Prompts device native authentication (Touch ID / Face ID / Windows Hello)
+            userVerification: "required",
+            residentKey: "required"
+          },
+          timeout: 60000,
+          attestation: "none"
+        }
+      });
+
+      if (!credential) {
+        throw new Error("Device cancelled passkey generation.");
+      }
+
+      // 3. Extract standard public key SPKI DER buffer
+      const attestationResponse = credential.response as AuthenticatorAttestationResponse;
+      const publicKeyBuffer = attestationResponse.getPublicKey();
+      const credentialId = credential.id;
+
+      const publicKeyDerHex = Array.from(new Uint8Array(publicKeyBuffer))
+        .map(b => b.toString(16).padStart(2, "0"))
+        .join("");
+
+      // 4. Send to server
       const res = await apiRequest("POST", "/api/auth/passkey-register", {
-        publicKeyJwk
+        credentialId,
+        publicKeyDerHex
       });
 
       if (!res.ok) {
-        throw new Error("Failed to register public key on the server");
+        throw new Error("Failed to register credential on the server");
       }
-
-      await new Promise<void>((resolve, reject) => {
-        const req = indexedDB.open("PasskeysDB", 1);
-        req.onupgradeneeded = () => {
-          req.result.createObjectStore("keys");
-        };
-        req.onsuccess = () => {
-          const db = req.result;
-          const tx = db.transaction("keys", "readwrite");
-          tx.objectStore("keys").put(keyPair.privateKey, user.email);
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-        };
-        req.onerror = () => reject(req.error);
-      });
 
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
 
       toast({
         title: "Passkey Registered",
-        description: "This device is now registered. You can log in using Passkey on this device!",
+        description: "This device's native biometric key has been linked to your account!",
       });
     } catch (err: any) {
       console.error("Passkey error:", err);
       toast({
         title: "Registration Failed",
-        description: err.message || "Failed to set up passkey.",
+        description: err.message || "Failed to set up native passkey.",
         variant: "destructive"
       });
     } finally {

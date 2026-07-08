@@ -36,6 +36,8 @@ export default function LoginPage() {
   const [isPasskeyAuthenticating, setIsPasskeyAuthenticating] = useState(false);
   const [emailInput, setEmailInput] = useState("");
 
+  const registerDevicePasskey = async () => {}; // dummy placeholder check if needed, but not here
+
   const handlePasskeyLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!emailInput) {
@@ -45,44 +47,48 @@ export default function LoginPage() {
 
     setIsPasskeyAuthenticating(true);
     try {
+      // 1. Fetch challenge from server
       const challengeRes = await apiRequest("GET", "/api/auth/passkey-challenge");
       const { challenge } = await challengeRes.json();
 
-      const privateKey = await new Promise<any>((resolve, reject) => {
-        const req = indexedDB.open("PasskeysDB", 1);
-        req.onupgradeneeded = () => {
-          req.result.createObjectStore("keys");
-        };
-        req.onsuccess = () => {
-          const db = req.result;
-          const tx = db.transaction("keys", "readonly");
-          const getReq = tx.objectStore("keys").get(emailInput);
-          getReq.onsuccess = () => resolve(getReq.result);
-          getReq.onerror = () => reject(getReq.error);
-        };
-        req.onerror = () => reject(req.error);
-      });
-
-      if (!privateKey) {
-        throw new Error("No Passkey registered for this email on this device.");
-      }
-
-      const encoder = new TextEncoder();
-      const challengeData = encoder.encode(challenge);
-      const signatureBuffer = await window.crypto.subtle.sign(
-        {
-          name: "RSASSA-PKCS1-v1_5",
-        },
-        privateKey,
-        challengeData
+      const challengeBuffer = new Uint8Array(
+        challenge.match(/.{1,2}/g).map((byte: string) => parseInt(byte, 16))
       );
 
-      const signatureHex = Array.from(new Uint8Array(signatureBuffer))
+      // 2. Call standard native WebAuthn get API (triggers Apple Face ID / Touch ID prompt)
+      const assertion = await navigator.credentials.get({
+        publicKey: {
+          challenge: challengeBuffer,
+          rpId: window.location.hostname,
+          userVerification: "required"
+        }
+      });
+
+      if (!assertion) {
+        throw new Error("Device authentication cancelled.");
+      }
+
+      const authResponse = assertion.response as AuthenticatorAssertionResponse;
+
+      // 3. Hex encode parameters to verify securely on server
+      const clientDataJSONHex = Array.from(new Uint8Array(authResponse.clientDataJSON))
         .map(b => b.toString(16).padStart(2, "0"))
         .join("");
 
+      const authenticatorDataHex = Array.from(new Uint8Array(authResponse.authenticatorData))
+        .map(b => b.toString(16).padStart(2, "0"))
+        .join("");
+
+      const signatureHex = Array.from(new Uint8Array(authResponse.signature))
+        .map(b => b.toString(16).padStart(2, "0"))
+        .join("");
+
+      // 4. Verify assertion on server
       const verifyRes = await apiRequest("POST", "/api/auth/passkey-verify", {
         email: emailInput,
+        credentialId: assertion.id,
+        clientDataJSONHex,
+        authenticatorDataHex,
         signatureHex
       });
 
