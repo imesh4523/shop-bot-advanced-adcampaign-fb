@@ -1251,11 +1251,11 @@ export default function MiniAppShop() {
             { id: 'vultr', label: 'Vultr', icon: <SiVultr className="w-4 h-4" /> },
             { id: 'hetzner', label: 'Hetzner', icon: <SiHetzner className="w-4 h-4" /> },
             { id: 'oracle', label: 'Oracle', icon: <Database className="w-4 h-4" /> },
-            { id: 'chatgpt', label: 'ChatGPT', icon: <img src="/openai.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
-            { id: 'claude', label: 'Claude', icon: <img src="/claude.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
-            { id: 'gemini', label: 'Gemini', icon: <img src="/gemini.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
-            { id: 'cursor', label: 'Cursor', icon: <img src="/cursor.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
-            { id: 'capcut', label: 'CapCut', icon: <img src="/capcut.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
+            { id: 'chatgpt', label: 'ChatGPT', icon: <img src="/openai.svg" className="w-4 h-4 object-contain transition-all" /> },
+            { id: 'claude', label: 'Claude', icon: <img src="/claude.svg" className="w-4 h-4 object-contain transition-all" /> },
+            { id: 'gemini', label: 'Gemini', icon: <img src="/gemini.svg" className="w-4 h-4 object-contain transition-all" /> },
+            { id: 'cursor', label: 'Cursor', icon: <img src="/cursor.svg" className="w-4 h-4 object-contain transition-all" /> },
+            { id: 'capcut', label: 'CapCut', icon: <img src="/capcut.svg" className="w-4 h-4 object-contain transition-all" /> },
           ].map((cat) => (
             <button
               key={cat.id}
