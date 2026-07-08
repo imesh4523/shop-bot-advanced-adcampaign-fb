@@ -1967,7 +1967,14 @@ export async function registerRoutes(
           throw new Error("User or product not found");
         }
 
-        const totalPrice = product.price * quantity;
+        // Fetch exchange rate settings for the product currency (USD base)
+        const currencySetting = await tx.query.settings.findFirst({
+          where: eq(settings.key, `CURRENCY_RATE_${product.currency || 'USD'}`)
+        });
+        const rate = currencySetting ? parseFloat(currencySetting.value) : 1.0;
+        
+        const totalPriceInProductCurrency = product.price * quantity;
+        const totalPriceInUsdCents = Math.round(totalPriceInProductCurrency / rate);
 
         // 2. Check stock first
         const availableItems = await tx.select()
@@ -1980,13 +1987,13 @@ export async function registerRoutes(
           throw new Error(`Insufficient stock. Only ${availableItems.length} items available.`);
         }
 
-        // 3. Check and Deduct balance atomically
+        // 3. Check and Deduct balance atomically (converting product currency to USD balance)
         const [updatedUser] = await tx
           .update(telegramUsers)
           .set({
-            balance: sql`${telegramUsers.balance} - ${totalPrice}`
+            balance: sql`${telegramUsers.balance} - ${totalPriceInUsdCents}`
           })
-          .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, totalPrice)))
+          .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, totalPriceInUsdCents)))
           .returning();
 
         if (!updatedUser) {
@@ -2121,11 +2128,19 @@ export async function registerRoutes(
         if (offer.status !== 'active') throw new Error("Offer is no longer active");
         if (offer.expiresAt && new Date(offer.expiresAt) < new Date()) throw new Error("Offer has expired");
 
-        // Check balance
+        // Fetch exchange rate settings for the product currency (USD base)
+        const productCurrency = offer.product?.currency || 'USD';
+        const currencySetting = await tx.query.settings.findFirst({
+          where: eq(settings.key, `CURRENCY_RATE_${productCurrency}`)
+        });
+        const rate = currencySetting ? parseFloat(currencySetting.value) : 1.0;
+        const priceInUsdCents = Math.round(offer.price / rate);
+
+        // Check balance (converting offer price in product currency to USD balance)
         const [updatedUser] = await tx
           .update(telegramUsers)
-          .set({ balance: sql`${telegramUsers.balance} - ${offer.price}` })
-          .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, offer.price)))
+          .set({ balance: sql`${telegramUsers.balance} - ${priceInUsdCents}` })
+          .where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, priceInUsdCents)))
           .returning();
 
         if (!updatedUser) throw new Error("Insufficient balance");
@@ -3428,6 +3443,10 @@ app.post("/api/settings", isAuth, async (req, res) => {
       "CRYPTOMUS_MERCHANT_ID",
       "BINANCE_PAY_ID",
       "BINANCE_API_KEY",
+      "CURRENCY_RATE_USD",
+      "CURRENCY_RATE_LKR",
+      "CURRENCY_RATE_INR",
+      "CURRENCY_RATE_EUR",
       "BINANCE_SECRET_KEY",
       "faq_content",
       "TUTORIAL_BUY_VIDEO",

@@ -186,9 +186,18 @@ function CredentialsDialog({ product }: { product: Product }) {
   );
 }
 
+const formatProductPrice = (priceInCents: number, currency: string) => {
+  const amount = priceInCents / 100;
+  if (currency === 'LKR') return `${amount.toFixed(0)} LKR`;
+  if (currency === 'INR') return `₹${amount.toFixed(2)}`;
+  if (currency === 'EUR') return `€${amount.toFixed(2)}`;
+  return `$${amount.toFixed(2)}`;
+};
+
 // Zod schema for the form (needs coercion for number)
 const productFormSchema = insertProductSchema.extend({
   price: z.coerce.number().min(0.01, "Price must be greater than 0"),
+  currency: z.string().default("USD"),
 });
 
 type ProductFormValues = z.infer<typeof productFormSchema>;
@@ -312,7 +321,7 @@ export default function ProductsPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="font-black text-white text-base tracking-tighter">
-                    ${(product.price / 100).toFixed(2)}
+                    {formatProductPrice(product.price, product.currency || 'USD')}
                   </TableCell>
                   <TableCell>
                     <StatusBadge status={product.status} />
@@ -424,6 +433,7 @@ function EditProductDialog({
         : "Custom",
       description: product.description || "",
       price: product.price / 100,
+      currency: product.currency || "USD",
     },
   });
 
@@ -476,7 +486,7 @@ function EditProductDialog({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <FormField
                 control={form.control}
                 name="type"
@@ -514,10 +524,34 @@ function EditProductDialog({
                 name="price"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-0.5">Price ($)</FormLabel>
+                    <FormLabel className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-0.5">Price</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" placeholder="15.00" className="glass-panel h-11 rounded-xl border-white/5 bg-white/[0.02] text-sm text-white placeholder:text-white/10 focus:border-purple-500/50 transition-all" {...field} />
                     </FormControl>
+                    <FormMessage className="text-red-400 font-bold text-xs" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="currency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-0.5">Currency</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="glass-panel h-11 rounded-xl border-white/5 bg-white/[0.02] text-sm text-white focus:border-purple-500/50 transition-all">
+                          <SelectValue placeholder="Select currency" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="glass-panel border-white/10 bg-background text-white rounded-xl">
+                        <SelectItem value="USD">USD ($)</SelectItem>
+                        <SelectItem value="LKR">LKR (Rs)</SelectItem>
+                        <SelectItem value="INR">INR (₹)</SelectItem>
+                        <SelectItem value="EUR">EUR (€)</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage className="text-red-400 font-bold text-xs" />
                   </FormItem>
                 )}
@@ -662,6 +696,7 @@ function CreateProductDialog({ open, onOpenChange }: { open: boolean, onOpenChan
       type: "AWS",
       description: "",
       price: 0,
+      currency: "USD",
     },
   });
 
@@ -724,7 +759,7 @@ function CreateProductDialog({ open, onOpenChange }: { open: boolean, onOpenChan
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <FormField
                 control={form.control}
                 name="type"
@@ -762,10 +797,34 @@ function CreateProductDialog({ open, onOpenChange }: { open: boolean, onOpenChan
                 name="price"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-0.5">Price ($)</FormLabel>
+                    <FormLabel className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-0.5">Price</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" placeholder="15.00" className="glass-panel h-11 rounded-xl border-white/5 bg-white/[0.02] text-sm text-white placeholder:text-white/10 focus:border-purple-500/50 transition-all" {...field} />
                     </FormControl>
+                    <FormMessage className="text-red-400 font-bold text-xs" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="currency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-[9px] font-black uppercase tracking-widest text-white/30 ml-0.5">Currency</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="glass-panel h-11 rounded-xl border-white/5 bg-white/[0.02] text-sm text-white focus:border-purple-500/50 transition-all">
+                          <SelectValue placeholder="Select currency" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="glass-panel border-white/10 bg-background text-white rounded-xl">
+                        <SelectItem value="USD">USD ($)</SelectItem>
+                        <SelectItem value="LKR">LKR (Rs)</SelectItem>
+                        <SelectItem value="INR">INR (₹)</SelectItem>
+                        <SelectItem value="EUR">EUR (€)</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage className="text-red-400 font-bold text-xs" />
                   </FormItem>
                 )}

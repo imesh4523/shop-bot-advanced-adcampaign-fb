@@ -25,6 +25,7 @@ export const products = pgTable("products", {
   description: text("description"),
   type: text("type").notNull(), // Category (e.g. AWS, DigitalOcean)
   price: integer("price").notNull(), // In cents
+  currency: text("currency").notNull().default("USD"),
   status: text("status").notNull().default("available"),
   createdAt: timestamp("created_at").defaultNow(),
 });

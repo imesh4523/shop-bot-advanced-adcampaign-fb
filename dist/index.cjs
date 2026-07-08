@@ -46394,6 +46394,7 @@ var init_schema2 = __esm({
       // Category (e.g. AWS, DigitalOcean)
       price: integer("price").notNull(),
       // In cents
+      currency: text("currency").notNull().default("USD"),
       status: text("status").notNull().default("available"),
       createdAt: timestamp("created_at").defaultNow()
     });
@@ -97020,14 +97021,19 @@ ${extraInstructions}
         if (!user || !product) {
           throw new Error("User or product not found");
         }
-        const totalPrice = product.price * quantity;
+        const currencySetting = await tx.query.settings.findFirst({
+          where: eq(settings.key, `CURRENCY_RATE_${product.currency || "USD"}`)
+        });
+        const rate = currencySetting ? parseFloat(currencySetting.value) : 1;
+        const totalPriceInProductCurrency = product.price * quantity;
+        const totalPriceInUsdCents = Math.round(totalPriceInProductCurrency / rate);
         const availableItems = await tx.select().from(credentials).where(and(eq(credentials.productId, productId), eq(credentials.status, "available"))).limit(quantity).for("update", { skipLocked: true });
         if (availableItems.length < quantity) {
           throw new Error(`Insufficient stock. Only ${availableItems.length} items available.`);
         }
         const [updatedUser] = await tx.update(telegramUsers).set({
-          balance: sql`${telegramUsers.balance} - ${totalPrice}`
-        }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, totalPrice))).returning();
+          balance: sql`${telegramUsers.balance} - ${totalPriceInUsdCents}`
+        }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, totalPriceInUsdCents))).returning();
         if (!updatedUser) {
           throw new Error("Insufficient balance");
         }
@@ -97133,7 +97139,13 @@ Thank you for shopping with us! <tg-emoji emoji-id="5456343263340405032">\u{1F6C
         if (!user || !offer) throw new Error("User or offer not found");
         if (offer.status !== "active") throw new Error("Offer is no longer active");
         if (offer.expiresAt && new Date(offer.expiresAt) < /* @__PURE__ */ new Date()) throw new Error("Offer has expired");
-        const [updatedUser] = await tx.update(telegramUsers).set({ balance: sql`${telegramUsers.balance} - ${offer.price}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, offer.price))).returning();
+        const productCurrency = offer.product?.currency || "USD";
+        const currencySetting = await tx.query.settings.findFirst({
+          where: eq(settings.key, `CURRENCY_RATE_${productCurrency}`)
+        });
+        const rate = currencySetting ? parseFloat(currencySetting.value) : 1;
+        const priceInUsdCents = Math.round(offer.price / rate);
+        const [updatedUser] = await tx.update(telegramUsers).set({ balance: sql`${telegramUsers.balance} - ${priceInUsdCents}` }).where(and(eq(telegramUsers.id, user.id), gte(telegramUsers.balance, priceInUsdCents))).returning();
         if (!updatedUser) throw new Error("Insufficient balance");
         const availableItems = await tx.select().from(credentials).where(and(eq(credentials.productId, offer.productId), eq(credentials.status, "available"))).limit(offer.bundleQuantity).for("update", { skipLocked: true });
         if (availableItems.length < offer.bundleQuantity) {
@@ -98224,6 +98236,10 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
         "CRYPTOMUS_MERCHANT_ID",
         "BINANCE_PAY_ID",
         "BINANCE_API_KEY",
+        "CURRENCY_RATE_USD",
+        "CURRENCY_RATE_LKR",
+        "CURRENCY_RATE_INR",
+        "CURRENCY_RATE_EUR",
         "BINANCE_SECRET_KEY",
         "faq_content",
         "TUTORIAL_BUY_VIDEO",

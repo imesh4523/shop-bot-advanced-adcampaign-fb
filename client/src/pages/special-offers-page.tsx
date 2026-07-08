@@ -52,6 +52,14 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
+const formatProductPrice = (priceInCents: number, currency: string) => {
+  const amount = priceInCents / 100;
+  if (currency === 'LKR') return `${amount.toFixed(0)} LKR`;
+  if (currency === 'INR') return `₹${amount.toFixed(2)}`;
+  if (currency === 'EUR') return `€${amount.toFixed(2)}`;
+  return `$${amount.toFixed(2)}`;
+};
+
 const specialOfferFormSchema = insertSpecialOfferSchema.extend({
   price: z.coerce.number().min(0.01, "Price must be greater than 0"),
   bundleQuantity: z.coerce.number().min(1, "Quantity must be at least 1"),
@@ -195,7 +203,7 @@ export default function SpecialOffersPage() {
                     {offer.bundleQuantity} pcs
                   </TableCell>
                   <TableCell className="font-black text-white text-base tracking-tighter">
-                    ${(offer.price / 100).toFixed(2)}
+                    {formatProductPrice(offer.price, offer.product?.currency || 'USD')}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1">

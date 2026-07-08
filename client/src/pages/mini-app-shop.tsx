@@ -134,31 +134,31 @@ const getProviderTheme = (name: string, type: string) => {
       hover: "group-hover:bg-[#F3BA2F]"
     },
     claude: {
-      logo: "https://upload.wikimedia.org/wikipedia/commons/d/d4/Claude_AI_symbol.svg",
+      logo: "https://svgl.app/library/claude.svg",
       color: "text-[#D97706]",
       bg: "bg-[#D97706]/5",
       hover: "group-hover:bg-[#D97706]"
     },
     gemini: {
-      logo: "https://upload.wikimedia.org/wikipedia/commons/1/10/Google_Gemini_icon_2025.svg",
+      logo: "https://svgl.app/library/gemini.svg",
       color: "text-[#1A73E8]",
       bg: "bg-[#1A73E8]/5",
       hover: "group-hover:bg-[#1A73E8]"
     },
     cursor: {
-      logo: "https://www.cursor.com/assets/images/logo.svg",
+      logo: "https://svgl.app/library/cursor.svg",
       color: "text-white",
       bg: "bg-white/5",
       hover: "group-hover:bg-white/20"
     },
     chatgpt: {
-      logo: "https://upload.wikimedia.org/wikipedia/commons/0/04/ChatGPT_logo.svg",
+      logo: "https://svgl.app/library/chatgpt.svg",
       color: "text-[#10A37F]",
       bg: "bg-[#10A37F]/5",
       hover: "group-hover:bg-[#10A37F]"
     },
     capcut: {
-      logo: "https://cdn.jsdelivr.net/npm/@thesvg/icons/icons/capcut.svg",
+      logo: "https://svgl.app/library/capcut.svg",
       color: "text-[#00C4FF]",
       bg: "bg-[#00C4FF]/5",
       hover: "group-hover:bg-[#00C4FF]"
@@ -389,6 +389,37 @@ export default function MiniAppShop() {
     }
   });
 
+  const [displayCurrency, setDisplayCurrency] = useState<"USD" | "LKR" | "INR" | "EUR">((localStorage.getItem("display_currency") as any) || "USD");
+
+  const { data: rateLkrSetting } = useQuery<{ value: string }>({
+    queryKey: ["/api/settings/CURRENCY_RATE_LKR"]
+  });
+  const { data: rateInrSetting } = useQuery<{ value: string }>({
+    queryKey: ["/api/settings/CURRENCY_RATE_INR"]
+  });
+  const { data: rateEurSetting } = useQuery<{ value: string }>({
+    queryKey: ["/api/settings/CURRENCY_RATE_EUR"]
+  });
+
+  const getRate = (currency: string) => {
+    if (currency === 'LKR') return rateLkrSetting?.value ? parseFloat(rateLkrSetting.value) : 300;
+    if (currency === 'INR') return rateInrSetting?.value ? parseFloat(rateInrSetting.value) : 83;
+    if (currency === 'EUR') return rateEurSetting?.value ? parseFloat(rateEurSetting.value) : 0.92;
+    return 1.0;
+  };
+
+  const formatPrice = (amountInCents: number, fromCurrency: string = 'USD', toCurrency: string) => {
+    const fromRate = getRate(fromCurrency);
+    const amountInUsdCents = Math.round(amountInCents / fromRate);
+    const toRate = getRate(toCurrency);
+    const convertedAmount = (amountInUsdCents / 100) * toRate;
+    
+    if (toCurrency === 'LKR') return `${convertedAmount.toFixed(0)} LKR`;
+    if (toCurrency === 'INR') return `₹${convertedAmount.toFixed(2)}`;
+    if (toCurrency === 'EUR') return `€${convertedAmount.toFixed(2)}`;
+    return `$${(amountInUsdCents / 100).toFixed(2)}`;
+  };
+
   // Immediately set body background on first render (before useEffect) to avoid flash
   const isDarkMode = theme === "dark" || (theme === "system" && typeof window !== 'undefined' && window.matchMedia("(prefers-color-scheme: dark)").matches);
   if (typeof window !== 'undefined') {
@@ -405,7 +436,7 @@ export default function MiniAppShop() {
   const autoSwapRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [purchaseSuccess, setPurchaseSuccess] = useState(false);
   const [purchaseQuantity, setPurchaseQuantity] = useState(1);
-  const [selectedOffer, setSelectedOffer] = useState<SpecialOffer | null>(null);
+  const [selectedOffer, setSelectedOffer] = useState<(SpecialOffer & { product?: any }) | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [activeTutorial, setActiveTutorial] = useState<"buy" | "deposit" | null>(null);
 
@@ -1154,7 +1185,7 @@ export default function MiniAppShop() {
                   <div className="flex items-end gap-3 mt-3">
                     <div className="flex flex-col">
                       <span className="text-[9px] font-black uppercase tracking-widest text-white/60 mb-0.5">Bundle × {offer.bundleQuantity}</span>
-                      <span className="text-4xl font-black tracking-tighter leading-none">${(offer.price / 100).toFixed(2)}</span>
+                      <span className="text-4xl font-black tracking-tighter leading-none">{formatPrice(offer.price, offer.product?.currency || 'USD', displayCurrency)}</span>
                     </div>
                     <Button 
                       size="sm" 
@@ -1220,11 +1251,11 @@ export default function MiniAppShop() {
             { id: 'vultr', label: 'Vultr', icon: <SiVultr className="w-4 h-4" /> },
             { id: 'hetzner', label: 'Hetzner', icon: <SiHetzner className="w-4 h-4" /> },
             { id: 'oracle', label: 'Oracle', icon: <Database className="w-4 h-4" /> },
-            { id: 'chatgpt', label: 'ChatGPT', icon: <img src="https://upload.wikimedia.org/wikipedia/commons/0/04/ChatGPT_logo.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
-            { id: 'claude', label: 'Claude', icon: <img src="https://upload.wikimedia.org/wikipedia/commons/d/d4/Claude_AI_symbol.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
-            { id: 'gemini', label: 'Gemini', icon: <img src="https://upload.wikimedia.org/wikipedia/commons/1/10/Google_Gemini_icon_2025.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
-            { id: 'cursor', label: 'Cursor', icon: <img src="https://www.cursor.com/assets/images/logo.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
-            { id: 'capcut', label: 'CapCut', icon: <img src="https://cdn.jsdelivr.net/npm/@thesvg/icons/icons/capcut.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
+            { id: 'chatgpt', label: 'ChatGPT', icon: <img src="https://svgl.app/library/chatgpt.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
+            { id: 'claude', label: 'Claude', icon: <img src="https://svgl.app/library/claude.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
+            { id: 'gemini', label: 'Gemini', icon: <img src="https://svgl.app/library/gemini.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
+            { id: 'cursor', label: 'Cursor', icon: <img src="https://svgl.app/library/cursor.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
+            { id: 'capcut', label: 'CapCut', icon: <img src="https://svgl.app/library/capcut.svg" className="w-4 h-4 object-contain group-hover:brightness-0 group-hover:invert transition-all" /> },
           ].map((cat) => (
             <button
               key={cat.id}
@@ -1285,7 +1316,7 @@ export default function MiniAppShop() {
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="font-black text-xl text-neutral-900 dark:text-card-foreground tracking-tighter">
-                      ${(product.price / 100).toFixed(2)}
+                      {formatPrice(product.price, product.currency || 'USD', displayCurrency)}
                     </span>
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shadow-sm ${theme.bg} ${theme.color} ${theme.hover} group-hover:text-white`}>
                       <ChevronRight className="w-5 h-5" />
@@ -1548,7 +1579,7 @@ export default function MiniAppShop() {
                 </div>
                 <div className="text-center space-y-0.5">
                   <div className="text-[10px] font-black text-neutral-400 dark:text-neutral-500 uppercase tracking-widest">Balance</div>
-                  <div className="text-xl font-black text-neutral-900 dark:text-white tracking-tighter">${((user?.balance || 0) / 100).toFixed(2)}</div>
+                  <div className="text-xl font-black text-neutral-900 dark:text-white tracking-tighter">{formatPrice(user?.balance || 0, 'USD', displayCurrency)}</div>
                 </div>
               </div>
 
@@ -1739,7 +1770,7 @@ export default function MiniAppShop() {
             >
               <Wallet className="w-4 h-4 text-purple-600" />
               <span className="text-lg font-black tracking-tighter text-neutral-900 dark:text-white leading-none italic">
-                ${((user?.balance || 0) / 100).toFixed(2)}
+                {formatPrice(user?.balance || 0, 'USD', displayCurrency)}
               </span>
             </motion.div>
             <ThemeToggle className="bg-neutral-50 dark:bg-neutral-900 border-neutral-100 dark:border-neutral-800 text-neutral-900 dark:text-white hover:bg-neutral-200 dark:hover:bg-neutral-800 shadow-inner" />
@@ -1848,7 +1879,7 @@ export default function MiniAppShop() {
             <div className="bg-purple-50/50 p-5 rounded-3xl border border-purple-100 flex justify-between items-center">
               <span className="text-xs font-black text-purple-900/40 uppercase tracking-widest">Total Price</span>
               <span className="text-2xl font-black text-purple-900 tracking-tighter">
-                ${selectedProduct ? ((selectedProduct.price * purchaseQuantity) / 100).toFixed(2) : "0.00"}
+                {selectedProduct ? formatPrice(selectedProduct.price * purchaseQuantity, selectedProduct.currency || 'USD', displayCurrency) : formatPrice(0, 'USD', displayCurrency)}
               </span>
             </div>
           </div>
@@ -1907,7 +1938,7 @@ export default function MiniAppShop() {
               </div>
               <div className="bg-white/5 p-4 rounded-3xl border border-white/5 flex flex-col items-center gap-1">
                 <span className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Bundle Price</span>
-                <span className="text-xl font-black text-amber-400">${selectedOffer ? (selectedOffer.price / 100).toFixed(2) : "0.00"}</span>
+                <span className="text-xl font-black text-amber-400">{selectedOffer ? formatPrice(selectedOffer.price, selectedOffer.product?.currency || 'USD', displayCurrency) : formatPrice(0, 'USD', displayCurrency)}</span>
               </div>
             </div>
 
@@ -2214,6 +2245,26 @@ export default function MiniAppShop() {
                 <DialogDescription className="text-xs font-bold uppercase tracking-widest text-neutral-400 dark:text-neutral-500 mt-1">
                   {activeDeposit ? "Submit transaction details" : "Select amount and method"}
                 </DialogDescription>
+                {!activeDeposit && (
+                  <div className="flex justify-center gap-2 mt-4">
+                    {(['USD', 'LKR', 'INR', 'EUR'] as const).map((curr) => (
+                      <button
+                        key={curr}
+                        onClick={() => {
+                          setDisplayCurrency(curr);
+                          localStorage.setItem("display_currency", curr);
+                        }}
+                        className={`text-[9px] font-black px-3.5 py-1.5 rounded-full transition-all duration-300 ${
+                          displayCurrency === curr
+                            ? 'bg-purple-600 text-white shadow-md shadow-purple-900/30 scale-105'
+                            : 'bg-neutral-100 dark:bg-white/5 text-neutral-400 hover:text-neutral-900 dark:hover:text-white border border-neutral-200 dark:border-white/5'
+                        }`}
+                      >
+                        {curr}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </DialogHeader>
 

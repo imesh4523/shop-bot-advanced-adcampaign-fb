@@ -81,6 +81,9 @@ export default function SettingsPage() {
   const [stripeWebhookSecret, setStripeWebhookSecret] = useState("");
   const [minDepositLimit, setMinDepositLimit] = useState("1.00");
   const [digitalOceanApiKey, setDigitalOceanApiKey] = useState("");
+  const [currencyRateLkr, setCurrencyRateLkr] = useState("300.0");
+  const [currencyRateInr, setCurrencyRateInr] = useState("83.0");
+  const [currencyRateEur, setCurrencyRateEur] = useState("0.92");
 
   // 2FA state variables
   const [showSetup, setShowSetup] = useState(false);
@@ -215,6 +218,18 @@ export default function SettingsPage() {
 
   const { data: themeColorSetting, isLoading: isThemeColorLoading } = useQuery<{ key: string, value: string }>({
     queryKey: ["/api/settings/THEME_COLOR"],
+  });
+
+  const { data: rateLkrSetting } = useQuery<{ key: string, value: string }>({
+    queryKey: ["/api/settings/CURRENCY_RATE_LKR"],
+  });
+
+  const { data: rateInrSetting } = useQuery<{ key: string, value: string }>({
+    queryKey: ["/api/settings/CURRENCY_RATE_INR"],
+  });
+
+  const { data: rateEurSetting } = useQuery<{ key: string, value: string }>({
+    queryKey: ["/api/settings/CURRENCY_RATE_EUR"],
   });
 
   const { data: supportUsernameSetting, isLoading: isSupportUsernameLoading } = useQuery<{ key: string, value: string }>({
@@ -441,6 +456,18 @@ export default function SettingsPage() {
   useEffect(() => {
     if (themeColorSetting?.value !== undefined) setThemeColor(themeColorSetting.value || "#a855f7");
   }, [themeColorSetting]);
+
+  useEffect(() => {
+    if (rateLkrSetting?.value !== undefined) setCurrencyRateLkr(rateLkrSetting.value);
+  }, [rateLkrSetting]);
+
+  useEffect(() => {
+    if (rateInrSetting?.value !== undefined) setCurrencyRateInr(rateInrSetting.value);
+  }, [rateInrSetting]);
+
+  useEffect(() => {
+    if (rateEurSetting?.value !== undefined) setCurrencyRateEur(rateEurSetting.value);
+  }, [rateEurSetting]);
 
   useEffect(() => {
     if (supportUsernameSetting?.value !== undefined) setSupportUsername(supportUsernameSetting.value);
@@ -853,6 +880,31 @@ export default function SettingsPage() {
       toast({
         title: "Branding Updated",
         description: `${variables.key.replace("_", " ").toLowerCase()} has been updated.`,
+      });
+    }
+  });
+
+  const currencyRatesMutation = useMutation({
+    mutationFn: async (rates: { CURRENCY_RATE_LKR: string; CURRENCY_RATE_INR: string; CURRENCY_RATE_EUR: string }) => {
+      const promises = Object.entries(rates).map(([key, value]) =>
+        apiRequest("POST", "/api/settings", { key, value }).then(res => res.json())
+      );
+      return Promise.all(promises);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/CURRENCY_RATE_LKR"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/CURRENCY_RATE_INR"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/CURRENCY_RATE_EUR"] });
+      toast({
+        title: "Exchange Rates Updated",
+        description: "Currency exchange rates have been saved successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to Update Exchange Rates",
+        description: error.message || "An error occurred.",
+        variant: "destructive",
       });
     }
   });
@@ -1362,6 +1414,69 @@ export default function SettingsPage() {
                 Create a read/write token in your <a href="https://cloud.digitalocean.com/account/api/tokens" target="_blank" rel="noreferrer" className="text-purple-400 hover:underline">DigitalOcean API settings</a>.
               </p>
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="max-w-2xl">
+        <Card className="glass-card border-0">
+          <div className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 p-6 border-b border-white/10">
+            <CardTitle className="text-2xl font-black tracking-tighter flex items-center gap-3">
+              <Sparkles className="w-6 h-6 text-purple-400" />
+              Multi-Currency Exchange Rates
+            </CardTitle>
+            <CardDescription className="text-white/40">
+              Configure the exchange rates for converting USD value into other currencies (1 USD = Rate).
+            </CardDescription>
+          </div>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-white/70 uppercase tracking-widest">LKR Rate</Label>
+                <Input
+                  type="number"
+                  step="any"
+                  placeholder="300"
+                  className="glass-panel border-white/10 bg-purple-950/20 text-white h-12 rounded-xl focus:border-purple-500/50 transition-all"
+                  value={currencyRateLkr}
+                  onChange={(e) => setCurrencyRateLkr(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-white/70 uppercase tracking-widest">INR Rate</Label>
+                <Input
+                  type="number"
+                  step="any"
+                  placeholder="83"
+                  className="glass-panel border-white/10 bg-purple-950/20 text-white h-12 rounded-xl focus:border-purple-500/50 transition-all"
+                  value={currencyRateInr}
+                  onChange={(e) => setCurrencyRateInr(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-white/70 uppercase tracking-widest">EUR Rate</Label>
+                <Input
+                  type="number"
+                  step="any"
+                  placeholder="0.92"
+                  className="glass-panel border-white/10 bg-purple-950/20 text-white h-12 rounded-xl focus:border-purple-500/50 transition-all"
+                  value={currencyRateEur}
+                  onChange={(e) => setCurrencyRateEur(e.target.value)}
+                />
+              </div>
+            </div>
+            <Button
+              onClick={() => currencyRatesMutation.mutate({
+                CURRENCY_RATE_LKR: currencyRateLkr,
+                CURRENCY_RATE_INR: currencyRateInr,
+                CURRENCY_RATE_EUR: currencyRateEur,
+              })}
+              disabled={currencyRatesMutation.isPending}
+              className="w-full h-12 rounded-xl bg-gradient-to-r from-purple-500 to-blue-600 hover:from-purple-600 hover:to-blue-700 font-bold"
+            >
+              {currencyRatesMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Save className="w-5 h-5 mr-2" />}
+              Save Exchange Rates
+            </Button>
           </CardContent>
         </Card>
       </div>
