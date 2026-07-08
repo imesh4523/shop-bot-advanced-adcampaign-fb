@@ -95942,6 +95942,54 @@ async function registerRoutes(httpServer2, app2, io2) {
     }
     res.json({ success: true, user });
   });
+  app2.post("/api/mini/auth/google", async (req, res) => {
+    const { credential } = req.body;
+    if (!credential) {
+      return res.status(400).json({ message: "Credential token is required" });
+    }
+    try {
+      const googleEnabledSetting = await storage.getSetting("GOOGLE_LOGIN_ENABLED");
+      const googleClientIdSetting = await storage.getSetting("GOOGLE_CLIENT_ID");
+      if (googleEnabledSetting?.value !== "true" || !googleClientIdSetting?.value) {
+        return res.status(400).json({ message: "Google login is not enabled." });
+      }
+      const clientId = googleClientIdSetting.value.trim();
+      const response = await axios_default.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`);
+      const tokenInfo = response.data;
+      if (!tokenInfo || tokenInfo.error_description) {
+        return res.status(400).json({ message: tokenInfo.error_description || "Invalid Google ID token" });
+      }
+      if (tokenInfo.aud !== clientId) {
+        return res.status(400).json({ message: "Audience mismatch." });
+      }
+      if (!tokenInfo.email_verified || tokenInfo.email_verified === "false" || tokenInfo.email_verified === false) {
+        return res.status(400).json({ message: "Google email is not verified" });
+      }
+      const email = tokenInfo.email;
+      const cleanEmail = email.toLowerCase().trim();
+      const telegramId = `email:${cleanEmail}`;
+      let user = await storage.getTelegramUser(telegramId);
+      if (!user) {
+        const name = tokenInfo.given_name || cleanEmail.split("@")[0];
+        const displayName = name.charAt(0).toUpperCase() + name.slice(1);
+        user = await storage.createTelegramUser({
+          telegramId,
+          username: cleanEmail.split("@")[0],
+          firstName: displayName,
+          lastName: tokenInfo.family_name || "Client",
+          balance: 0,
+          lastAction: null
+        });
+        console.log(`[Google Customer Auth] Created new user profile for ${cleanEmail}`);
+      } else {
+        console.log(`[Google Customer Auth] Logged in existing user ${cleanEmail}.`);
+      }
+      res.json({ success: true, user });
+    } catch (err) {
+      console.error("Google customer authentication failed:", err.message);
+      res.status(500).json({ message: "Google authentication failed: " + (err.message || "Unknown error") });
+    }
+  });
   app2.get("/api/mini/user", verifyMiniAppAuth, async (req, res) => {
     const tgUser = req.tgUser;
     if (!tgUser.id) return res.status(400).json({ message: "User ID missing" });

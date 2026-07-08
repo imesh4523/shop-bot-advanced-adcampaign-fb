@@ -934,6 +934,86 @@ export default function MiniAppShop() {
     queryKey: ["/api/settings/THEME_COLOR"],
   });
 
+  const { data: googleLoginEnabledSetting } = useQuery<{ value: string }>({
+    queryKey: ["/api/settings/GOOGLE_LOGIN_ENABLED"],
+  });
+
+  const { data: googleClientIdSetting } = useQuery<{ value: string }>({
+    queryKey: ["/api/settings/GOOGLE_CLIENT_ID"],
+  });
+
+  const googleEnabled = googleLoginEnabledSetting?.value === "true";
+  const googleClientId = googleClientIdSetting?.value ? googleClientIdSetting.value.trim() : null;
+
+  useEffect(() => {
+    if (!googleEnabled || !googleClientId) return;
+
+    const renderButtons = () => {
+      try {
+        if ((window as any).google?.accounts?.id) {
+          (window as any).google.accounts.id.initialize({
+            client_id: googleClientId,
+            callback: async (response: any) => {
+              setIsAuthSubmitting(true);
+              try {
+                const res = await fetch("/api/mini/auth/google", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ credential: response.credential })
+                });
+                if (!res.ok) {
+                  const err = await res.json();
+                  throw new Error(err.message || "Google Login failed");
+                }
+                const data = await res.json();
+                localStorage.setItem("web_user_id", data.user.telegramId);
+                toast({ title: "Login Successful", description: `Welcome back, ${data.user.firstName}!` });
+                setIsLoginDialogOpen(false);
+                queryClient.invalidateQueries({ queryKey: ["/api/mini/user"] });
+                queryClient.invalidateQueries({ queryKey: ["/api/mini/orders"] });
+                queryClient.invalidateQueries({ queryKey: ["/api/mini/payments"] });
+              } catch (err: any) {
+                toast({ title: "Error", description: err.message, variant: "destructive" });
+              } finally {
+                setIsAuthSubmitting(false);
+              }
+            }
+          });
+
+          const containers = ["google-signin-btn-drawer", "google-signin-btn-dialog"];
+          containers.forEach(id => {
+            const el = document.getElementById(id);
+            if (el && (window as any).google?.accounts?.id) {
+              (window as any).google.accounts.id.renderButton(el, {
+                theme: "outline",
+                size: "large",
+                width: el.clientWidth || 300,
+                shape: "pill",
+                text: "signin_with"
+              });
+            }
+          });
+        }
+      } catch (e) {
+        console.error("Failed to render Google buttons:", e);
+      }
+    };
+
+    if (!document.getElementById("google-gsi-client")) {
+      const script = document.createElement("script");
+      script.id = "google-gsi-client";
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        setTimeout(renderButtons, 300);
+      };
+      document.body.appendChild(script);
+    } else {
+      setTimeout(renderButtons, 300);
+    }
+  }, [googleEnabled, googleClientId, isGuest, isLoginDialogOpen]);
+
   const storeName = storeNameSetting?.value || "Shopeefy";
   const supportUsername = supportUsernameSetting?.value || "@rochana_imesh";
   const supportBtnText = supportBtnTextSetting?.value || "Write to Support";
@@ -1699,6 +1779,13 @@ export default function MiniAppShop() {
                 >
                   {isAuthSubmitting ? "Sending..." : "Send Verification Code"}
                 </Button>
+
+                {googleEnabled && (
+                  <div className="flex flex-col items-center gap-3 pt-4 border-t border-neutral-100">
+                    <span className="text-[9px] font-black text-neutral-400 uppercase tracking-widest">Or Sign In with Google</span>
+                    <div id="google-signin-btn-drawer" className="w-full flex justify-center scale-95" />
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
@@ -2644,6 +2731,13 @@ export default function MiniAppShop() {
                     {isAuthSubmitting ? "Sending..." : "Send Verification Code"}
                   </Button>
                 </DialogFooter>
+
+                {googleEnabled && (
+                  <div className="flex flex-col items-center gap-3 pt-4 border-t border-neutral-100 dark:border-white/5">
+                    <span className="text-[9px] font-black text-neutral-400 dark:text-neutral-500 uppercase tracking-widest">Or Sign In with Google</span>
+                    <div id="google-signin-btn-dialog" className="w-full flex justify-center scale-95" />
+                  </div>
+                )}
               </div>
             ) : (
               <div className="py-4 space-y-6">
