@@ -4367,7 +4367,8 @@ const PUBLIC_SETTINGS_KEYS = [
   "THEME_COLOR",
   "GOOGLE_CLIENT_ID",
   "GOOGLE_LOGIN_ENABLED",
-  "CATEGORY_ORDER"
+  "CATEGORY_ORDER",
+  "STRIPE_ENABLED"
 ];
 
 app.get("/api/settings/:key", async (req, res, next) => {

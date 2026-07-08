@@ -1102,6 +1102,12 @@ export default function MiniAppShop() {
 
   const isStripeLocked = stripeEnabledSetting?.value === "false";
 
+  useEffect(() => {
+    if (isStripeLocked && depositMethod === "stripe") {
+      setDepositMethod("binance");
+    }
+  }, [isStripeLocked, depositMethod]);
+
   const googleEnabled = googleLoginEnabledSetting?.value === "true";
   const googleClientId = googleClientIdSetting?.value ? googleClientIdSetting.value.trim() : null;
 

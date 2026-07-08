@@ -99041,7 +99041,8 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
     "THEME_COLOR",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_LOGIN_ENABLED",
-    "CATEGORY_ORDER"
+    "CATEGORY_ORDER",
+    "STRIPE_ENABLED"
   ];
   app2.get("/api/settings/:key", async (req, res, next) => {
     const { key } = req.params;
