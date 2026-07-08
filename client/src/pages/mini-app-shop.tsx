@@ -56,13 +56,10 @@ import {
 const miniApiRequest = async (method: string, path: string, body?: any) => {
   const initData = getTelegramInitData();
   
-  let webUserId = "";
-  if (!initData) {
-    webUserId = localStorage.getItem("web_user_id") || "";
-    if (!webUserId) {
-      webUserId = "web_guest_" + Math.random().toString(36).substring(2, 15);
-      localStorage.setItem("web_user_id", webUserId);
-    }
+  let webUserId = localStorage.getItem("web_user_id") || "";
+  if (!webUserId) {
+    webUserId = "web_guest_" + Math.random().toString(36).substring(2, 15);
+    localStorage.setItem("web_user_id", webUserId);
   }
 
   const res = await fetch(path, {
@@ -737,7 +734,7 @@ export default function MiniAppShop() {
       const initData = getTelegramInitData();
       // Always ensure a web_user_id exists (same logic as miniApiRequest)
       let webUserId = localStorage.getItem("web_user_id") || "";
-      if (!initData && !webUserId) {
+      if (!webUserId) {
         webUserId = "web_guest_" + Math.random().toString(36).substring(2, 15);
         localStorage.setItem("web_user_id", webUserId);
       }
