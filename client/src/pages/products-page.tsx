@@ -60,7 +60,8 @@ import {
   DndContext,
   closestCenter,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -239,6 +240,7 @@ export default function ProductsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.products.list.path] });
+      toast({ title: "✅ Order saved", description: "Product order updated successfully." });
     },
     onError: () => {
       toast({ title: "Failed to save order", variant: "destructive" });
@@ -247,7 +249,8 @@ export default function ProductsPage() {
   });
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -296,7 +299,7 @@ export default function ProductsPage() {
           <h1 className="text-3xl font-black text-white tracking-tighter drop-shadow-2xl">
             Products
           </h1>
-          <p className="text-white/40 text-sm font-medium">Manage your cloud account inventory.</p>
+          <p className="text-white/40 text-sm font-medium">Manage your cloud account inventory. <span className="text-purple-400/60 inline-flex items-center gap-1"><GripVertical className="w-3 h-3 inline" />Drag rows to reorder.</span></p>
         </div>
           <div className="flex items-center gap-3">
             <CreateProductDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} />
