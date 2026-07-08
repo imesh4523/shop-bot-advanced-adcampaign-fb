@@ -2500,6 +2500,32 @@ export default function MiniAppShop() {
                                   {msg.message}
                                 </div>
                               )}
+                              {/* Copy button — only for admin messages with text */}
+                              {isAdmin && msg.message && msg.message !== "📷 Photo Attachment" && msg.message !== "📄 PDF Attachment" && (
+                                <div className="mt-2 pt-1.5 border-t border-white/10 flex justify-end">
+                                  <button
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(msg.message).then(() => {
+                                        toast({ title: "Copied!", description: "Message copied to clipboard." });
+                                      }).catch(() => {
+                                        // fallback for older browsers
+                                        const el = document.createElement("textarea");
+                                        el.value = msg.message;
+                                        document.body.appendChild(el);
+                                        el.select();
+                                        document.execCommand("copy");
+                                        document.body.removeChild(el);
+                                        toast({ title: "Copied!", description: "Message copied to clipboard." });
+                                      });
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-full text-[8px] font-bold uppercase tracking-wider transition-all active:scale-95"
+                                    title="Copy message"
+                                  >
+                                    <Copy className="w-2.5 h-2.5" />
+                                    Copy
+                                  </button>
+                                </div>
+                              )}
                               <div className="text-[7px] text-white/30 text-right mt-1 font-semibold uppercase">
                                 {formatTime(msg.createdAt)}
                               </div>
