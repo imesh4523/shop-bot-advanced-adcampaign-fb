@@ -1167,6 +1167,16 @@ export default function MiniAppShop() {
     });
   };
 
+  const openExternalLink = (url: string) => {
+    if (!url) return;
+    const webApp = (window as any).Telegram?.WebApp;
+    if (webApp && webApp.openLink) {
+      webApp.openLink(url);
+    } else {
+      window.open(url, "_blank");
+    }
+  };
+
   const { data: stripeEnabledSetting } = useQuery<{ value: string }>({
     queryKey: ["/api/settings/STRIPE_ENABLED"],
     staleTime: 0,
@@ -2675,15 +2685,17 @@ export default function MiniAppShop() {
                                     src={msg.attachmentUrl} 
                                     alt="attachment" 
                                     className="max-w-full h-auto rounded-xl hover:opacity-90 transition-opacity cursor-pointer"
-                                    onClick={() => window.open(msg.attachmentUrl!, "_blank")}
+                                    onClick={() => openExternalLink(msg.attachmentUrl!)}
                                   />
                                 </div>
                               )}
                               {msg.attachmentUrl && (msg.attachmentType === "pdf" || msg.attachmentType === "document") && (
                                 <a 
-                                  href={msg.attachmentUrl} 
-                                  target="_blank" 
-                                  rel="noreferrer" 
+                                  href={msg.attachmentUrl}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    openExternalLink(msg.attachmentUrl!);
+                                  }}
                                   className="flex items-center gap-2 p-2.5 bg-black/25 rounded-xl mb-2 hover:bg-black/35 transition-all text-purple-300 font-bold border border-white/5"
                                 >
                                   <FileText className="w-4 h-4 text-purple-400 shrink-0" />
@@ -3341,7 +3353,7 @@ export default function MiniAppShop() {
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
                   onClick={() => {
-                    window.open(whatsappLink, '_blank');
+                    openExternalLink(whatsappLink);
                     setIsSupportMenuOpen(false);
                   }}
                   className="w-12 h-12 rounded-full bg-[#25D366] text-white flex items-center justify-center shadow-lg shadow-green-600/30 border border-green-400/20"
