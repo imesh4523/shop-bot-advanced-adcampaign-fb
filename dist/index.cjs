@@ -55389,7 +55389,8 @@ var init_storage = __esm({
           { key: "APTOS_VERIFICATION_MODE", value: "binance" },
           { key: "MIN_DEPOSIT_LIMIT", value: "1.00" },
           { key: "DEFAULT_THEME", value: "dark" },
-          { key: "STRIPE_ENABLED", value: "true" }
+          { key: "STRIPE_ENABLED", value: "true" },
+          { key: "WHATSAPP_CONTACT_LINK", value: "https://wa.me/94760895782" }
         ];
         for (const s of defaultSettings) {
           const existing = await db.select().from(settings).where(eq(settings.key, s.key));
@@ -96718,6 +96719,18 @@ ${extraInstructions}
       res.status(500).json({ message: err.message || "Failed to fetch messages" });
     }
   });
+  app2.delete("/api/mini/support/clear", verifyMiniAppAuth, async (req, res) => {
+    try {
+      const tgUser = req.tgUser;
+      if (!tgUser.id) return res.status(400).json({ message: "User ID missing" });
+      const telegramId = tgUser.id.toString();
+      await db.delete(supportMessages).where(eq(supportMessages.telegramId, telegramId));
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Failed to clear support messages:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
   app2.get("/api/mini/products", verifyMiniAppAuth, async (req, res) => {
     const products3 = await storage.getProducts();
     const activeProducts = await Promise.all(products3.map(async (p) => {
@@ -98933,7 +98946,8 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
         "GOOGLE_VERTEX_KEY",
         "CATEGORY_ORDER",
         "STRIPE_ENABLED",
-        "DEFAULT_THEME"
+        "DEFAULT_THEME",
+        "WHATSAPP_CONTACT_LINK"
       ];
       if (!whitelistedKeys.includes(key)) {
         return res.status(403).json({ message: "Modifying this key is restricted" });
@@ -99093,7 +99107,8 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
     "GOOGLE_CLIENT_ID",
     "GOOGLE_LOGIN_ENABLED",
     "CATEGORY_ORDER",
-    "STRIPE_ENABLED"
+    "STRIPE_ENABLED",
+    "WHATSAPP_CONTACT_LINK"
   ];
   app2.get("/api/settings/:key", async (req, res, next) => {
     const { key } = req.params;

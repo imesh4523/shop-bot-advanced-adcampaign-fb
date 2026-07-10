@@ -239,7 +239,8 @@ export class DatabaseStorage implements IStorage {
       { key: "APTOS_VERIFICATION_MODE", value: "binance" },
       { key: "MIN_DEPOSIT_LIMIT", value: "1.00" },
       { key: "DEFAULT_THEME", value: "dark" },
-      { key: "STRIPE_ENABLED", value: "true" }
+      { key: "STRIPE_ENABLED", value: "true" },
+      { key: "WHATSAPP_CONTACT_LINK", value: "https://wa.me/94760895782" }
     ];
 
     for (const s of defaultSettings) {

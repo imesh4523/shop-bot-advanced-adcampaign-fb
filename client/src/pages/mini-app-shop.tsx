@@ -744,6 +744,8 @@ export default function MiniAppShop() {
   const [liveMessages, setLiveMessages] = useState<SupportMessage[]>([]);
   const [isLiveLoading, setIsLiveLoading] = useState(false);
   const [isRequestingHuman, setIsRequestingHuman] = useState(false);
+  const [isSupportMenuOpen, setIsSupportMenuOpen] = useState(false);
+  const [activeButtonIcon, setActiveButtonIcon] = useState<"chat" | "whatsapp">("chat");
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [uploadedAttachment, setUploadedAttachment] = useState<{ url: string; type: 'image' | 'pdf' | 'document'; name: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1123,6 +1125,37 @@ export default function MiniAppShop() {
     };
   }, [theme]);
 
+  // Support Floating Button periodic animation loop
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveButtonIcon(prev => prev === "chat" ? "whatsapp" : "chat");
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Initial load human chat state sync
+  useEffect(() => {
+    if (user?.telegramId) {
+      const checkActiveSupport = async () => {
+        try {
+          const res = await miniApiRequest("GET", "/api/mini/support/messages");
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+              setChatMode("human");
+              setLiveMessages(data);
+            } else {
+              setChatMode("ai");
+            }
+          }
+        } catch (err) {
+          console.error("Error checking support mode:", err);
+        }
+      };
+      checkActiveSupport();
+    }
+  }, [user?.telegramId]);
+
 
   const copyToClipboard = (text: string) => {
     if (!text) return;
@@ -1207,6 +1240,12 @@ export default function MiniAppShop() {
     queryKey: ["/api/settings/DEFAULT_THEME"],
     staleTime: 0,
   });
+
+  const { data: whatsappLinkSetting } = useQuery<{ value: string }>({
+    queryKey: ["/api/settings/WHATSAPP_CONTACT_LINK"],
+    staleTime: 0,
+  });
+  const whatsappLink = whatsappLinkSetting?.value || "https://wa.me/94760895782";
 
   useEffect(() => {
     if (!localStorage.getItem("shopeefy-theme") && defaultThemeSetting?.value) {
@@ -2534,7 +2573,16 @@ export default function MiniAppShop() {
                 <div className="flex items-center gap-2">
                   {chatMode === "human" ? (
                     <button 
-                      onClick={() => setChatMode("ai")} 
+                      onClick={async () => {
+                        try {
+                          await miniApiRequest("DELETE", "/api/mini/support/clear");
+                          setChatMode("ai");
+                          setLiveMessages([]);
+                        } catch (e) {
+                          setChatMode("ai");
+                          setLiveMessages([]);
+                        }
+                      }} 
                       className="text-[8px] font-extrabold uppercase bg-white/10 hover:bg-white/20 hover:scale-105 active:scale-95 text-white px-2.5 py-1.5 rounded-full transition-all duration-300"
                     >
                       AI Mode
@@ -2684,7 +2732,7 @@ export default function MiniAppShop() {
                     )}
                   </>
                 )}
-                {chatMode === "human" && liveMessages.length > 0 && liveMessages[liveMessages.length - 1].sender === 'user' && (
+                {chatMode === "human" && liveMessages.length > 0 && liveMessages[liveMessages.length - 1].sender === 'user' && !liveMessages.some(m => m.sender === 'admin') && (
                   <div className="flex flex-col items-center justify-center p-5 bg-purple-950/10 border border-purple-500/20 rounded-2xl gap-3 animate-pulse mt-4">
                     <div className="relative flex items-center justify-center">
                       <span className="animate-ping absolute inline-flex h-4 w-4 rounded-full bg-purple-500 opacity-75"></span>
@@ -3275,15 +3323,85 @@ export default function MiniAppShop() {
           </DialogContent>
         </Dialog>
  
+        <AnimatePresence>
+          {isSupportMenuOpen && !isChatOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 15, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 15, scale: 0.9 }}
+              transition={{ type: "spring", stiffness: 350, damping: 25 }}
+              className="flex flex-col items-end gap-3 mb-3"
+            >
+              {/* WhatsApp Option */}
+              <div className="flex items-center gap-2.5 group">
+                <span className="text-[9px] font-black uppercase text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/5 shadow-md">
+                  WhatsApp Support
+                </span>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => {
+                    window.open(whatsappLink, '_blank');
+                    setIsSupportMenuOpen(false);
+                  }}
+                  className="w-12 h-12 rounded-full bg-[#25D366] text-white flex items-center justify-center shadow-lg shadow-green-600/30 border border-green-400/20"
+                >
+                  <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.966C16.588 1.974 14.116 1.05 11.752 1.05c-5.444 0-9.87 4.372-9.873 9.802-.001 1.77.478 3.497 1.388 5.041l-.95 3.468 3.73-.967z"/>
+                  </svg>
+                </motion.button>
+              </div>
+
+              {/* Live Support Agent Option */}
+              <div className="flex items-center gap-2.5 group">
+                <span className="text-[9px] font-black uppercase text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/5 shadow-md">
+                  Live Agent
+                </span>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => {
+                    setIsChatOpen(true);
+                    setIsSupportMenuOpen(false);
+                  }}
+                  className="w-12 h-12 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-lg shadow-purple-600/30 border border-purple-400/20"
+                >
+                  <MessageSquare className="w-5 h-5" />
+                </motion.button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.9 }}
-          onClick={() => setIsChatOpen(!isChatOpen)}
+          onClick={() => {
+            if (isChatOpen) {
+              setIsChatOpen(false);
+            } else {
+              setIsSupportMenuOpen(!isSupportMenuOpen);
+            }
+          }}
           className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all duration-500 ${
-            isChatOpen ? 'bg-white text-black rotate-90' : 'bg-primary text-white shadow-primary/30'
+            isChatOpen 
+              ? 'bg-white text-black rotate-90' 
+              : isSupportMenuOpen
+                ? 'bg-red-500 text-white shadow-red-500/30 rotate-90'
+                : activeButtonIcon === 'whatsapp'
+                  ? 'bg-[#25D366] text-white shadow-green-600/30'
+                  : 'bg-purple-600 text-white shadow-purple-600/30'
           }`}
         >
-          {isChatOpen ? <X className="w-6 h-6" /> : <MessageCircle className="w-7 h-7" />}
+          {isChatOpen || isSupportMenuOpen ? (
+            <X className="w-6 h-6" />
+          ) : activeButtonIcon === 'whatsapp' ? (
+            <svg className="w-7 h-7 fill-current animate-pulse" viewBox="0 0 24 24">
+              <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.966C16.588 1.974 14.116 1.05 11.752 1.05c-5.444 0-9.87 4.372-9.873 9.802-.001 1.77.478 3.497 1.388 5.041l-.95 3.468 3.73-.967z"/>
+            </svg>
+          ) : (
+            <MessageCircle className="w-7 h-7" />
+          )}
         </motion.button>
       </div>
     </div>

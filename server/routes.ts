@@ -1517,6 +1517,20 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/mini/support/clear", verifyMiniAppAuth, async (req, res) => {
+    try {
+      const tgUser = (req as any).tgUser;
+      if (!tgUser.id) return res.status(400).json({ message: "User ID missing" });
+
+      const telegramId = tgUser.id.toString();
+      await db.delete(supportMessages).where(eq(supportMessages.telegramId, telegramId));
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("Failed to clear support messages:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
 
 
   // Get active products for the shop
@@ -4211,7 +4225,8 @@ app.post("/api/settings", isAuth, async (req, res) => {
       "GOOGLE_VERTEX_KEY",
       "CATEGORY_ORDER",
       "STRIPE_ENABLED",
-      "DEFAULT_THEME"
+      "DEFAULT_THEME",
+      "WHATSAPP_CONTACT_LINK"
     ];
 
     if (!whitelistedKeys.includes(key)) {
@@ -4405,7 +4420,8 @@ const PUBLIC_SETTINGS_KEYS = [
   "GOOGLE_CLIENT_ID",
   "GOOGLE_LOGIN_ENABLED",
   "CATEGORY_ORDER",
-  "STRIPE_ENABLED"
+  "STRIPE_ENABLED",
+  "WHATSAPP_CONTACT_LINK"
 ];
 
 app.get("/api/settings/:key", async (req, res, next) => {

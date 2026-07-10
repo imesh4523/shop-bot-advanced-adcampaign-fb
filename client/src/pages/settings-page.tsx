@@ -66,6 +66,7 @@ export default function SettingsPage() {
   const [supportBtnText, setSupportBtnText] = useState("");
   const [loadingText, setLoadingText] = useState("");
   const [defaultTheme, setDefaultTheme] = useState("dark");
+  const [whatsappLink, setWhatsappLink] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [vapidPublicKey, setVapidPublicKey] = useState("");
@@ -358,6 +359,10 @@ export default function SettingsPage() {
     queryKey: ["/api/settings/SUPPORT_BTN_TEXT"],
   });
 
+  const { data: whatsappLinkSetting } = useQuery<{ key: string, value: string }>({
+    queryKey: ["/api/settings/WHATSAPP_CONTACT_LINK"],
+  });
+
   const { data: loadingTextSetting, isLoading: isLoadingTextLoading } = useQuery<{ key: string, value: string }>({
     queryKey: ["/api/settings/LOADING_TEXT"],
   });
@@ -624,6 +629,10 @@ export default function SettingsPage() {
   useEffect(() => {
     if (supportBtnTextSetting?.value !== undefined) setSupportBtnText(supportBtnTextSetting.value);
   }, [supportBtnTextSetting]);
+
+  useEffect(() => {
+    if (whatsappLinkSetting?.value !== undefined) setWhatsappLink(whatsappLinkSetting.value || "");
+  }, [whatsappLinkSetting]);
 
   useEffect(() => {
     if (loadingTextSetting?.value !== undefined) setLoadingText(loadingTextSetting.value);
@@ -2140,6 +2149,25 @@ export default function SettingsPage() {
                 />
                 <Button
                   onClick={() => brandingMutation.mutate({ key: "SUPPORT_BTN_TEXT", value: supportBtnText })}
+                  disabled={brandingMutation.isPending}
+                  className="h-12 px-4 rounded-xl bg-gradient-to-r from-purple-500 to-blue-600 font-bold"
+                >
+                  {brandingMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-4 border-t border-white/5">
+              <Label className="text-sm font-bold text-white/70 uppercase tracking-widest">WhatsApp Contact Link</Label>
+              <div className="flex gap-3">
+                <Input
+                  placeholder="e.g. https://wa.me/94760895782"
+                  className="glass-panel border-white/10 bg-purple-950/20 text-white h-12 rounded-xl focus:border-purple-500/50 transition-all"
+                  value={whatsappLink}
+                  onChange={(e) => setWhatsappLink(e.target.value)}
+                />
+                <Button
+                  onClick={() => brandingMutation.mutate({ key: "WHATSAPP_CONTACT_LINK", value: whatsappLink })}
                   disabled={brandingMutation.isPending}
                   className="h-12 px-4 rounded-xl bg-gradient-to-r from-purple-500 to-blue-600 font-bold"
                 >
