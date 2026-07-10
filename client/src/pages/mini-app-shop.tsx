@@ -663,7 +663,7 @@ export default function MiniAppShop() {
       if (depositMethod === 'stripe') {
         toast({ title: "Redirection", description: "Redirecting you to Stripe checkout..." });
         setIsDepositModalOpen(false);
-        window.location.href = data.url;
+        openExternalLink(data.url);
       } else {
         setActiveDeposit({
           paymentId: data.paymentId,
@@ -1169,11 +1169,33 @@ export default function MiniAppShop() {
 
   const openExternalLink = (url: string) => {
     if (!url) return;
+    let absoluteUrl = url.trim();
+    
+    // Convert relative path to absolute
+    if (absoluteUrl.startsWith("/")) {
+      absoluteUrl = `${window.location.origin}${absoluteUrl}`;
+    }
+    
+    // Format raw phone number to WhatsApp link if applicable
+    if (/^\+?[0-9\s\-]{7,15}$/.test(absoluteUrl)) {
+      let phone = absoluteUrl.replace(/[\s\-\+]/g, "");
+      if (phone.startsWith("0")) {
+        phone = "94" + phone.substring(1);
+      }
+      absoluteUrl = `https://wa.me/${phone}`;
+    } else if (!absoluteUrl.startsWith("http://") && !absoluteUrl.startsWith("https://")) {
+      absoluteUrl = `https://${absoluteUrl}`;
+    }
+
     const webApp = (window as any).Telegram?.WebApp;
     if (webApp && webApp.openLink) {
-      webApp.openLink(url);
+      try {
+        webApp.openLink(absoluteUrl);
+      } catch (e) {
+        window.open(absoluteUrl, "_blank");
+      }
     } else {
-      window.open(url, "_blank");
+      window.open(absoluteUrl, "_blank");
     }
   };
 
