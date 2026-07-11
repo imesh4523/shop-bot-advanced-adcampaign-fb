@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { createWorker } from "tesseract.js";
 
 interface Feedback {
   id: number;
@@ -48,42 +47,12 @@ export default function FeedbacksPage() {
   const [currentPos, setCurrentPos] = useState({ x: 0, y: 0 });
   
   // Status states
-  const [ocrProgress, setOcrProgress] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [showPreviewUrl, setShowPreviewUrl] = useState<string | null>(null);
 
   // Fetch feedbacks query
   const { data: feedbacks = [], isLoading } = useQuery<Feedback[]>({
     queryKey: ["/api/feedbacks"],
-  });
-
-  // Create feedback record mutation
-  const createFeedbackMutation = useMutation({
-    mutationFn: async (data: { title: string; imageUrl: string }) => {
-      const response = await fetch("/api/feedbacks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) throw new Error("Failed to save feedback record");
-      return await response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/feedbacks"] });
-      toast({
-        title: "Success",
-        description: "Customer feedback proof uploaded successfully!",
-      });
-      resetUploader();
-    },
-    onError: (err: any) => {
-      toast({
-        title: "Error",
-        description: err.message || "Failed to upload feedback.",
-        variant: "destructive",
-      });
-    },
   });
 
   // Delete feedback record mutation
@@ -123,112 +92,8 @@ export default function FeedbacksPage() {
         setImgElement(img);
         setBlurBoxes([]);
         setShowPreviewUrl(null);
-        runOcrAndDetect(url, img.width, img.height);
       };
       img.src = url;
-    }
-  };
-
-  // Run OCR to find phone numbers
-  const runOcrAndDetect = async (src: string, originalWidth: number, originalHeight: number) => {
-    setOcrProgress("Initializing OCR Scanner...");
-    try {
-      const worker = await createWorker("eng");
-      setOcrProgress("Scanning image text...");
-      const { data } = await worker.recognize(src);
-      setOcrProgress("Processing phone number coordinates...");
-      
-      const detectedBoxes: BlurBox[] = [];
-      const words = data.words || [];
-
-      for (let i = 0; i < words.length; i++) {
-        const word = words[i];
-        const cleanText = word.text.replace(/[^0-9+]/g, "");
-
-        // Match complete Sri Lankan mobile formats in single word (e.g. 0777123456 or +94777123456)
-        if (/^(?:\+94|0)7[0-8]\d{7}$/.test(cleanText)) {
-          const { x0, y0, x1, y1 } = word.bbox;
-          const w = x1 - x0;
-          const h = y1 - y0;
-          
-          // Blur the right 70% of the box (the last 7 digits)
-          detectedBoxes.push({
-            x: x0 + w * 0.3,
-            y: y0,
-            w: w * 0.7,
-            h: h,
-            isAuto: true,
-          });
-        }
-
-        // Match multi-part words (e.g., ["+94", "77", "726", "2726"] or ["077", "726", "2726"])
-        if (i < words.length - 2) {
-          const w1 = words[i].text.replace(/[^0-9+]/g, "");
-          const w2 = words[i + 1].text.replace(/[^0-9]/g, "");
-          const w3 = words[i + 2].text.replace(/[^0-9]/g, "");
-
-          const isOperator = /^(?:\+94|0)?7[0-8]$/.test(w1) || (w1 === "+94" && /^[7][0-8]$/.test(w2));
-
-          if (isOperator) {
-            let digitIndex1 = i + 2;
-            let digitIndex2 = i + 3;
-
-            if (w1 === "+94" && /^[7][0-8]$/.test(w2) && i < words.length - 3) {
-              digitIndex1 = i + 3;
-              digitIndex2 = i + 4;
-            }
-
-            if (digitIndex2 < words.length) {
-              const num1 = words[digitIndex1];
-              const num2 = words[digitIndex2];
-              const cleanNum1 = num1.text.replace(/[^0-9]/g, "");
-              const cleanNum2 = num2.text.replace(/[^0-9]/g, "");
-
-              if (cleanNum1.length === 3 && cleanNum2.length === 4) {
-                // Blur the last 7 digits bounding boxes
-                detectedBoxes.push({
-                  x: num1.bbox.x0,
-                  y: num1.bbox.y0,
-                  w: num1.bbox.x1 - num1.bbox.x0,
-                  h: num1.bbox.y1 - num1.bbox.y0,
-                  isAuto: true,
-                });
-                detectedBoxes.push({
-                  x: num2.bbox.x0,
-                  y: num2.bbox.y0,
-                  w: num2.bbox.x1 - num2.bbox.x0,
-                  h: num2.bbox.y1 - num2.bbox.y0,
-                  isAuto: true,
-                });
-              }
-            }
-          }
-        }
-      }
-
-      await worker.terminate();
-      setBlurBoxes(detectedBoxes);
-      setOcrProgress(null);
-      
-      if (detectedBoxes.length > 0) {
-        toast({
-          title: "Phone Numbers Detected",
-          description: `Automatically found and masked ${detectedBoxes.length} phone number parts!`,
-        });
-      } else {
-        toast({
-          title: "Scan Completed",
-          description: "No phone numbers automatically found. You can blur manually by clicking & dragging.",
-        });
-      }
-    } catch (err) {
-      console.error("OCR scanning error:", err);
-      setOcrProgress(null);
-      toast({
-        title: "Scanning Failed",
-        description: "Auto-scan failed. You can still blur any number manually.",
-        variant: "destructive",
-      });
     }
   };
 
@@ -412,27 +277,32 @@ export default function FeedbacksPage() {
 
     setIsUploading(true);
     try {
-      // 1. Apply blur filters and compress client-side
+      // 1. Apply manual blur filters and compress client-side (instant)
       const compressedBlob = await applyBlurAndExport();
       
       // 2. Create Multipart Form upload payload
       const formData = new FormData();
+      formData.append("title", title);
       formData.append("image", compressedBlob, "customer-proof.jpg");
 
-      // 3. Post to existing upload endpoint
-      const uploadResponse = await fetch("/api/settings/upload", {
+      // 3. Post directly to the feedbacks endpoint
+      const response = await fetch("/api/feedbacks", {
         method: "POST",
         body: formData,
       });
 
-      if (!uploadResponse.ok) {
-        throw new Error("Failed to upload compressed image file");
+      if (!response.ok) {
+        throw new Error("Failed to upload and process feedback proof");
       }
 
-      const { imageUrl } = await uploadResponse.json();
+      await response.json();
 
-      // 4. Create database feedback entry
-      await createFeedbackMutation.mutateAsync({ title, imageUrl });
+      queryClient.invalidateQueries({ queryKey: ["/api/feedbacks"] });
+      toast({
+        title: "Success",
+        description: "Customer feedback proof uploaded and auto-blurred successfully!",
+      });
+      resetUploader();
     } catch (err: any) {
       console.error("Upload process error:", err);
       toast({
@@ -474,7 +344,7 @@ export default function FeedbacksPage() {
             <CardHeader>
               <CardTitle className="text-white font-black">Upload Customer Proof</CardTitle>
               <CardDescription className="text-white/40">
-                Select feedback screenshot. Phone numbers are automatically detected and masked.
+                Select feedback screenshot. It will be compressed locally and phone numbers will be automatically masked on the server.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -547,13 +417,13 @@ export default function FeedbacksPage() {
 
                   <Button
                     onClick={handleUpload}
-                    disabled={isUploading || isProcessing}
+                    disabled={isUploading}
                     className="w-full rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black"
                   >
                     {isUploading ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        Uploading Compressed JPG...
+                        Scanning & Blurring on Server...
                       </>
                     ) : (
                       <>
@@ -577,18 +447,12 @@ export default function FeedbacksPage() {
                 <div>
                   <CardTitle className="text-white font-black">Image Canvas Workspace</CardTitle>
                   <CardDescription className="text-white/40">
-                    Auto-scan status: {ocrProgress ? <span className="text-orange-400 animate-pulse font-bold">{ocrProgress}</span> : <span className="text-green-400 font-bold">Ready / Interactive</span>}
+                    Workspace is active. Drag your mouse to manually blur extra areas.
                   </CardDescription>
                 </div>
               </CardHeader>
               <CardContent className="flex flex-col items-center justify-center p-6 bg-black/40">
                 <div className="max-h-[60vh] max-w-full overflow-auto rounded-xl border border-white/10 relative">
-                  {ocrProgress && (
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-10">
-                      <RefreshCw className="w-8 h-8 animate-spin text-purple-400" />
-                      <span className="text-sm font-bold text-white">{ocrProgress}</span>
-                    </div>
-                  )}
                   <canvas
                     ref={canvasRef}
                     onMouseDown={handleMouseDown}
@@ -598,10 +462,6 @@ export default function FeedbacksPage() {
                   />
                 </div>
                 <div className="flex gap-4 mt-4 text-[10px] uppercase tracking-wider font-black text-white/40">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded bg-orange-500 inline-block" />
-                    Orange: Detected Numbers
-                  </span>
                   <span className="flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded bg-purple-500 inline-block" />
                     Purple: Custom Blur Rectangles

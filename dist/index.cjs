@@ -77183,6 +77183,8 @@ var import_helmet = __toESM(require("helmet"), 1);
 var import_path2 = __toESM(require("path"), 1);
 var import_fs2 = __toESM(require("fs"), 1);
 var import_multer = __toESM(require_multer(), 1);
+var import_jimp = require("jimp");
+var import_tesseract = require("tesseract.js");
 init_schema2();
 init_drizzle_orm();
 init_db2();
@@ -99097,16 +99099,104 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
       res.status(500).json({ message: "Internal server error" });
     }
   });
-  app2.post("/api/feedbacks", isAuth, async (req, res) => {
+  app2.post("/api/feedbacks", isAuth, upload.single("image"), async (req, res) => {
     try {
-      const { title, imageUrl } = req.body;
-      if (!imageUrl) {
-        return res.status(400).json({ message: "Image URL is required" });
+      const { title, manualBoxes } = req.body;
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
       }
+      const image = await import_jimp.Jimp.read(req.file.buffer);
+      const imgWidth = image.bitmap.width;
+      const imgHeight = image.bitmap.height;
+      const worker = await (0, import_tesseract.createWorker)("eng");
+      const { data } = await worker.recognize(req.file.buffer);
+      await worker.terminate();
+      const words = data.words || [];
+      const blurBoxes = [];
+      const isOperatorPrefix = (text2) => {
+        const clean = text2.replace(/[^0-9+]/g, "");
+        if (clean === "+94" || clean === "94") return true;
+        if (/^(?:\+94|94|0)?7[0-8]$/.test(clean)) return true;
+        return false;
+      };
+      for (let i = 0; i < words.length; i++) {
+        const word = words[i];
+        const cleanText = word.text.replace(/[^0-9+]/g, "");
+        if (/^(?:\+94|94|0)7[0-8]\d{7}$/.test(cleanText)) {
+          const { x0, y0, x1, y1 } = word.bbox;
+          const w = x1 - x0;
+          const h = y1 - y0;
+          blurBoxes.push({
+            x: Math.round(x0 + w * 0.3),
+            // Last 70% of width
+            y: y0,
+            w: Math.round(w * 0.7),
+            h
+          });
+          continue;
+        }
+        const cleanTextDigits = word.text.replace(/[^0-9]/g, "");
+        if (cleanTextDigits.length === 3 || cleanTextDigits.length === 4) {
+          let isPhonePart = false;
+          for (let offset = 1; offset <= 3; offset++) {
+            if (i - offset >= 0) {
+              const prevWord = words[i - offset];
+              if (isOperatorPrefix(prevWord.text)) {
+                isPhonePart = true;
+                break;
+              }
+            }
+          }
+          if (isPhonePart) {
+            const { x0, y0, x1, y1 } = word.bbox;
+            blurBoxes.push({
+              x: x0,
+              y: y0,
+              w: x1 - x0,
+              h: y1 - y0
+            });
+          }
+        }
+      }
+      if (manualBoxes) {
+        try {
+          const parsedManual = JSON.parse(manualBoxes);
+          if (Array.isArray(parsedManual)) {
+            parsedManual.forEach((box) => {
+              if (typeof box.x === "number" && typeof box.y === "number" && typeof box.w === "number" && typeof box.h === "number") {
+                blurBoxes.push({
+                  x: Math.round(box.x),
+                  y: Math.round(box.y),
+                  w: Math.round(box.w),
+                  h: Math.round(box.h)
+                });
+              }
+            });
+          }
+        } catch (e) {
+          console.error("Failed to parse manualBoxes:", e);
+        }
+      }
+      const blurRadius = Math.max(10, Math.round(imgWidth / 55));
+      for (const box of blurBoxes) {
+        const x = Math.max(0, Math.min(box.x, imgWidth - 1));
+        const y = Math.max(0, Math.min(box.y, imgHeight - 1));
+        const w = Math.max(1, Math.min(box.w, imgWidth - x));
+        const h = Math.max(1, Math.min(box.h, imgHeight - y));
+        const region = image.clone().crop({ x, y, w, h });
+        region.blur(blurRadius);
+        image.blit({ src: region, x, y });
+      }
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      const filename = uniqueSuffix + ".jpg";
+      const finalBuffer = await image.getBuffer("image/jpeg");
+      const base64Data = finalBuffer.toString("base64");
+      await storage.saveUploadedFile(filename, "image/jpeg", base64Data);
+      const imageUrl = `/uploads/${filename}`;
       const feedback = await storage.createCustomerFeedback({ title, imageUrl });
       res.json(feedback);
     } catch (err) {
-      console.error("Failed to create feedback:", err);
+      console.error("Failed to process and create feedback:", err);
       res.status(500).json({ message: "Internal server error" });
     }
   });

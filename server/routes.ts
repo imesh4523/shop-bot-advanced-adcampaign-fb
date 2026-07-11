@@ -8,6 +8,8 @@ import { Server as SocketServer } from "socket.io";
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
+import { Jimp } from 'jimp';
+import { createWorker } from 'tesseract.js';
 import { credentials, settings, payments, insertCredentialSchema, telegramUsers, users, insertAwsAccountSchema, insertSpecialOfferSchema, orders, products, supportMessages } from "@shared/schema";
 import { eq, desc, and, sql, gte, inArray } from "drizzle-orm";
 import { db, pool } from "./db";
@@ -4348,16 +4350,133 @@ app.get("/api/feedbacks", async (req, res) => {
   }
 });
 
-app.post("/api/feedbacks", isAuth, async (req, res) => {
+app.post("/api/feedbacks", isAuth, upload.single('image'), async (req: any, res) => {
   try {
-    const { title, imageUrl } = req.body;
-    if (!imageUrl) {
-      return res.status(400).json({ message: "Image URL is required" });
+    const { title, manualBoxes } = req.body;
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
     }
+
+    // 1. Load image into Jimp
+    const image = await Jimp.read(req.file.buffer);
+    const imgWidth = image.bitmap.width;
+    const imgHeight = image.bitmap.height;
+
+    // 2. Perform server-side OCR scan
+    const worker = await createWorker("eng");
+    const { data } = await worker.recognize(req.file.buffer);
+    await worker.terminate();
+
+    const words = data.words || [];
+    const blurBoxes: { x: number; y: number; w: number; h: number }[] = [];
+
+    // 3. Helper functions for Sri Lankan phone number detection
+    const isOperatorPrefix = (text: string) => {
+      const clean = text.replace(/[^0-9+]/g, "");
+      if (clean === "+94" || clean === "94") return true;
+      if (/^(?:\+94|94|0)?7[0-8]$/.test(clean)) return true;
+      return false;
+    };
+
+    // Run proximity-based search on words list
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i];
+      const cleanText = word.text.replace(/[^0-9+]/g, "");
+
+      // Case A: Single word containing full phone number (+94771234567 or 0771234567)
+      if (/^(?:\+94|94|0)7[0-8]\d{7}$/.test(cleanText)) {
+        const { x0, y0, x1, y1 } = word.bbox;
+        const w = x1 - x0;
+        const h = y1 - y0;
+        blurBoxes.push({
+          x: Math.round(x0 + w * 0.3), // Last 70% of width
+          y: y0,
+          w: Math.round(w * 0.7),
+          h: h,
+        });
+        continue;
+      }
+
+      // Case B: Split parts (like +94 77 220 4484 or 077 726 2726)
+      const cleanTextDigits = word.text.replace(/[^0-9]/g, "");
+      if (cleanTextDigits.length === 3 || cleanTextDigits.length === 4) {
+        let isPhonePart = false;
+        // Look back up to 3 words for prefix/operator code
+        for (let offset = 1; offset <= 3; offset++) {
+          if (i - offset >= 0) {
+            const prevWord = words[i - offset];
+            if (isOperatorPrefix(prevWord.text)) {
+              isPhonePart = true;
+              break;
+            }
+          }
+        }
+
+        if (isPhonePart) {
+          const { x0, y0, x1, y1 } = word.bbox;
+          blurBoxes.push({
+            x: x0,
+            y: y0,
+            w: x1 - x0,
+            h: y1 - y0,
+          });
+        }
+      }
+    }
+
+    // 4. Incorporate client manual boxes if passed
+    if (manualBoxes) {
+      try {
+        const parsedManual = JSON.parse(manualBoxes);
+        if (Array.isArray(parsedManual)) {
+          parsedManual.forEach((box: any) => {
+            if (
+              typeof box.x === "number" &&
+              typeof box.y === "number" &&
+              typeof box.w === "number" &&
+              typeof box.h === "number"
+            ) {
+              blurBoxes.push({
+                x: Math.round(box.x),
+                y: Math.round(box.y),
+                w: Math.round(box.w),
+                h: Math.round(box.h),
+              });
+            }
+          });
+        }
+      } catch (e) {
+        console.error("Failed to parse manualBoxes:", e);
+      }
+    }
+
+    // 5. Apply blur filter on the detected/manual boxes
+    const blurRadius = Math.max(10, Math.round(imgWidth / 55));
+    for (const box of blurBoxes) {
+      const x = Math.max(0, Math.min(box.x, imgWidth - 1));
+      const y = Math.max(0, Math.min(box.y, imgHeight - 1));
+      const w = Math.max(1, Math.min(box.w, imgWidth - x));
+      const h = Math.max(1, Math.min(box.h, imgHeight - y));
+
+      const region = image.clone().crop({ x, y, w, h });
+      region.blur(blurRadius);
+      image.blit({ src: region, x, y });
+    }
+
+    // 6. Compress and save file in storage
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const filename = uniqueSuffix + '.jpg';
+    const finalBuffer = await image.getBuffer("image/jpeg");
+    const base64Data = finalBuffer.toString('base64');
+    
+    await storage.saveUploadedFile(filename, "image/jpeg", base64Data);
+    const imageUrl = `/uploads/${filename}`;
+
+    // 7. Create customer feedback database record
     const feedback = await storage.createCustomerFeedback({ title, imageUrl });
     res.json(feedback);
   } catch (err) {
-    console.error("Failed to create feedback:", err);
+    console.error("Failed to process and create feedback:", err);
     res.status(500).json({ message: "Internal server error" });
   }
 });
