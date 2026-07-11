@@ -362,4 +362,16 @@ export const insertUploadedFileSchema = createInsertSchema(uploadedFiles).omit({
 export type UploadedFile = typeof uploadedFiles.$inferSelect;
 export type InsertUploadedFile = z.infer<typeof insertUploadedFileSchema>;
 
+export const customerFeedbacks = pgTable("customer_feedbacks", {
+  id: serial("id").primaryKey(),
+  title: text("title"),
+  imageUrl: text("image_url").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertCustomerFeedbackSchema = createInsertSchema(customerFeedbacks).omit({ id: true, createdAt: true });
+export type CustomerFeedback = typeof customerFeedbacks.$inferSelect;
+export type InsertCustomerFeedback = z.infer<typeof insertCustomerFeedbackSchema>;
+
+
 

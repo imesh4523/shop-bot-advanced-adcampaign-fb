@@ -55,7 +55,10 @@ import {
   type InsertVpnServer,
   uploadedFiles,
   type UploadedFile,
-  type InsertUploadedFile
+  type InsertUploadedFile,
+  customerFeedbacks,
+  type CustomerFeedback,
+  type InsertCustomerFeedback
 } from "@shared/schema";
 import { format } from "date-fns";
 import { eq, desc, asc, count, sql, and, or, gt, gte, lte, isNull, isNotNull } from "drizzle-orm";
@@ -181,6 +184,11 @@ export interface IStorage {
   // Uploaded Files
   getUploadedFile(filename: string): Promise<UploadedFile | undefined>;
   saveUploadedFile(filename: string, mimeType: string, data: string): Promise<UploadedFile>;
+
+  // Customer Feedbacks
+  getCustomerFeedbacks(): Promise<CustomerFeedback[]>;
+  createCustomerFeedback(feedback: InsertCustomerFeedback): Promise<CustomerFeedback>;
+  deleteCustomerFeedback(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1039,6 +1047,20 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return newFile;
+  }
+
+  // Customer Feedbacks
+  async getCustomerFeedbacks(): Promise<CustomerFeedback[]> {
+    return await db.select().from(customerFeedbacks).orderBy(desc(customerFeedbacks.createdAt));
+  }
+
+  async createCustomerFeedback(feedback: InsertCustomerFeedback): Promise<CustomerFeedback> {
+    const [newFeedback] = await db.insert(customerFeedbacks).values(feedback).returning();
+    return newFeedback;
+  }
+
+  async deleteCustomerFeedback(id: number): Promise<void> {
+    await db.delete(customerFeedbacks).where(eq(customerFeedbacks.id, id));
   }
 }
 

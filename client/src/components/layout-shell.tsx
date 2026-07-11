@@ -23,6 +23,7 @@ import {
   Image,
   Shield,
   ListOrdered,
+  Heart,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -80,6 +81,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     { name: 'Domain & Email', href: '/main-admin/domain-email', icon: Globe },
     { name: 'IP Manager', href: '/main-admin/ip-manager', icon: Globe },
     { name: 'Image Section', href: '/main-admin/image-section', icon: Image },
+    { name: 'Customer Feedbacks', href: '/main-admin/feedbacks', icon: Heart },
     { name: 'OpenVPN Servers', href: '/main-admin/openvpn', icon: Shield },
     { name: 'Settings', href: '/main-admin/settings', icon: Settings },
   ];

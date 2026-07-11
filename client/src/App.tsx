@@ -32,6 +32,8 @@ const ImageSectionPage = lazy(() => import("@/pages/image-section-page"));
 const MiniAppShop = lazy(() => import("@/pages/mini-app-shop"));
 const OpenVpnPage = lazy(() => import("@/pages/openvpn-page"));
 const CategoryOrderPage = lazy(() => import("@/pages/category-order-page"));
+const FeedbacksPage = lazy(() => import("@/pages/feedbacks-page"));
+const CustomerFeedbacksPublic = lazy(() => import("@/pages/customer-feedbacks-public"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 function PageLoader() {
@@ -91,6 +93,18 @@ function Router() {
         <Route path="/">
           <Suspense fallback={<PageLoader />}>
             {user ? <Redirect to="/main-admin" /> : <MiniAppShop />}
+          </Suspense>
+        </Route>
+
+        <Route path="/customer-feedbacks">
+          <Suspense fallback={<PageLoader />}>
+            <CustomerFeedbacksPublic />
+          </Suspense>
+        </Route>
+
+        <Route path="/customer-feedbacks">
+          <Suspense fallback={<PageLoader />}>
+            <CustomerFeedbacksPublic />
           </Suspense>
         </Route>
 
@@ -172,6 +186,10 @@ function Router() {
 
         <Route path="/main-admin/category-order">
           <ProtectedRoute component={CategoryOrderPage} />
+        </Route>
+
+        <Route path="/main-admin/feedbacks">
+          <ProtectedRoute component={FeedbacksPage} />
         </Route>
 
         {/* Fallback to 404 */}

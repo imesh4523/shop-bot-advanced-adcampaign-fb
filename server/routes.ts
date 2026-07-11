@@ -4337,6 +4337,46 @@ app.post("/api/settings/upload", isAuth, upload.single('image'), async (req: any
   }
 });
 
+// Customer Feedbacks API
+app.get("/api/feedbacks", async (req, res) => {
+  try {
+    const feedbacks = await storage.getCustomerFeedbacks();
+    res.json(feedbacks);
+  } catch (err) {
+    console.error("Failed to get feedbacks:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+app.post("/api/feedbacks", isAuth, async (req, res) => {
+  try {
+    const { title, imageUrl } = req.body;
+    if (!imageUrl) {
+      return res.status(400).json({ message: "Image URL is required" });
+    }
+    const feedback = await storage.createCustomerFeedback({ title, imageUrl });
+    res.json(feedback);
+  } catch (err) {
+    console.error("Failed to create feedback:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+app.delete("/api/feedbacks/:id", isAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ message: "Invalid ID" });
+    }
+    await storage.deleteCustomerFeedback(id);
+    res.json({ message: "Feedback deleted successfully" });
+  } catch (err) {
+    console.error("Failed to delete feedback:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+
 // Get unique support chats (grouped threads)
 app.get("/api/support/chats", isAuth, async (req, res) => {
   try {

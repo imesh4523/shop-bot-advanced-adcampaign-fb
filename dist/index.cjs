@@ -46330,6 +46330,7 @@ __export(schema_exports, {
   checkedIps: () => checkedIps,
   credentials: () => credentials,
   credentialsRelations: () => credentialsRelations,
+  customerFeedbacks: () => customerFeedbacks,
   insertAwsAccountSchema: () => insertAwsAccountSchema,
   insertAwsActivitySchema: () => insertAwsActivitySchema,
   insertBackupConfigSchema: () => insertBackupConfigSchema,
@@ -46338,6 +46339,7 @@ __export(schema_exports, {
   insertBroadcastMessageSchema: () => insertBroadcastMessageSchema,
   insertCheckedIpSchema: () => insertCheckedIpSchema,
   insertCredentialSchema: () => insertCredentialSchema,
+  insertCustomerFeedbackSchema: () => insertCustomerFeedbackSchema,
   insertOrderSchema: () => insertOrderSchema,
   insertPaymentSchema: () => insertPaymentSchema,
   insertProductSchema: () => insertProductSchema,
@@ -46369,7 +46371,7 @@ __export(schema_exports, {
   users: () => users2,
   vpnServers: () => vpnServers
 });
-var users2, insertUserSchema, products, credentials, telegramUsers, settings, payments, productsRelations, credentialsRelations, telegramUsersRelations, orders, ordersRelations, paymentsRelations, insertProductSchema, insertCredentialSchema, insertOrderSchema, insertTelegramUserSchema, insertPaymentSchema, broadcastChannels, broadcastMessages, insertBroadcastChannelSchema, insertBroadcastMessageSchema, pushSubscriptions, pushSubscriptionsRelations, insertPushSubscriptionSchema, awsAccounts, awsActivities, awsAccountsRelations, awsActivitiesRelations, insertAwsAccountSchema, insertAwsActivitySchema, specialOffers2, specialOffersRelations, insertSpecialOfferSchema, backupConfigs, backupLogs, insertBackupConfigSchema, insertBackupLogSchema, trafficLogs, insertTrafficLogSchema, supportMessages, insertSupportMessageSchema, checkedIps, insertCheckedIpSchema, vpnServers, insertVpnServerSchema, uploadedFiles, insertUploadedFileSchema;
+var users2, insertUserSchema, products, credentials, telegramUsers, settings, payments, productsRelations, credentialsRelations, telegramUsersRelations, orders, ordersRelations, paymentsRelations, insertProductSchema, insertCredentialSchema, insertOrderSchema, insertTelegramUserSchema, insertPaymentSchema, broadcastChannels, broadcastMessages, insertBroadcastChannelSchema, insertBroadcastMessageSchema, pushSubscriptions, pushSubscriptionsRelations, insertPushSubscriptionSchema, awsAccounts, awsActivities, awsAccountsRelations, awsActivitiesRelations, insertAwsAccountSchema, insertAwsActivitySchema, specialOffers2, specialOffersRelations, insertSpecialOfferSchema, backupConfigs, backupLogs, insertBackupConfigSchema, insertBackupLogSchema, trafficLogs, insertTrafficLogSchema, supportMessages, insertSupportMessageSchema, checkedIps, insertCheckedIpSchema, vpnServers, insertVpnServerSchema, uploadedFiles, insertUploadedFileSchema, customerFeedbacks, insertCustomerFeedbackSchema;
 var init_schema2 = __esm({
   "shared/schema.ts"() {
     "use strict";
@@ -46664,6 +46666,13 @@ var init_schema2 = __esm({
       createdAt: timestamp("created_at").defaultNow()
     });
     insertUploadedFileSchema = createInsertSchema(uploadedFiles).omit({ id: true, createdAt: true });
+    customerFeedbacks = pgTable("customer_feedbacks", {
+      id: serial("id").primaryKey(),
+      title: text("title"),
+      imageUrl: text("image_url").notNull(),
+      createdAt: timestamp("created_at").defaultNow()
+    });
+    insertCustomerFeedbackSchema = createInsertSchema(customerFeedbacks).omit({ id: true, createdAt: true });
   }
 });
 
@@ -55961,6 +55970,17 @@ var init_storage = __esm({
           set: { mimeType, data, createdAt: /* @__PURE__ */ new Date() }
         }).returning();
         return newFile;
+      }
+      // Customer Feedbacks
+      async getCustomerFeedbacks() {
+        return await db.select().from(customerFeedbacks).orderBy(desc(customerFeedbacks.createdAt));
+      }
+      async createCustomerFeedback(feedback) {
+        const [newFeedback] = await db.insert(customerFeedbacks).values(feedback).returning();
+        return newFeedback;
+      }
+      async deleteCustomerFeedback(id) {
+        await db.delete(customerFeedbacks).where(eq(customerFeedbacks.id, id));
       }
     };
     storage = new DatabaseStorage();
@@ -99065,6 +99085,41 @@ Enjoy your premium bundle! <tg-emoji emoji-id="5456343263340405032">\u{1F6CD}\uF
       res.json({ imageUrl });
     } catch (err) {
       console.error("Settings image upload failed:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+  app2.get("/api/feedbacks", async (req, res) => {
+    try {
+      const feedbacks = await storage.getCustomerFeedbacks();
+      res.json(feedbacks);
+    } catch (err) {
+      console.error("Failed to get feedbacks:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+  app2.post("/api/feedbacks", isAuth, async (req, res) => {
+    try {
+      const { title, imageUrl } = req.body;
+      if (!imageUrl) {
+        return res.status(400).json({ message: "Image URL is required" });
+      }
+      const feedback = await storage.createCustomerFeedback({ title, imageUrl });
+      res.json(feedback);
+    } catch (err) {
+      console.error("Failed to create feedback:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+  app2.delete("/api/feedbacks/:id", isAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid ID" });
+      }
+      await storage.deleteCustomerFeedback(id);
+      res.json({ message: "Feedback deleted successfully" });
+    } catch (err) {
+      console.error("Failed to delete feedback:", err);
       res.status(500).json({ message: "Internal server error" });
     }
   });
