@@ -3455,11 +3455,11 @@ export default function MiniAppShop() {
               initial="hidden"
               animate="visible"
               exit="exit"
-              className="absolute bottom-16 right-0 flex flex-col-reverse items-end gap-3 pr-1"
+              className="absolute bottom-16 right-0 flex flex-col-reverse items-end gap-3 pr-1 w-max"
             >
               {/* Live Support Agent Option */}
               <motion.div variants={itemVariants} className="flex items-center gap-2.5 group">
-                <span className="text-[9px] font-black uppercase text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/5 shadow-md">
+                <span className="text-[9px] font-black uppercase text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/5 shadow-md whitespace-nowrap">
                   Live Agent
                 </span>
                 <motion.button
@@ -3469,7 +3469,7 @@ export default function MiniAppShop() {
                     setIsChatOpen(true);
                     setIsSupportMenuOpen(false);
                   }}
-                  className="w-12 h-12 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-lg shadow-purple-600/30 border border-purple-400/20"
+                  className="w-12 h-12 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-lg shadow-purple-600/30 border border-purple-400/20 shrink-0"
                 >
                   <MessageSquare className="w-5 h-5" />
                 </motion.button>
@@ -3477,7 +3477,7 @@ export default function MiniAppShop() {
 
               {/* WhatsApp Option */}
               <motion.div variants={itemVariants} className="flex items-center gap-2.5 group">
-                <span className="text-[9px] font-black uppercase text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/5 shadow-md">
+                <span className="text-[9px] font-black uppercase text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/5 shadow-md whitespace-nowrap">
                   WhatsApp Support
                 </span>
                 <motion.button
@@ -3487,7 +3487,7 @@ export default function MiniAppShop() {
                     openExternalLink(whatsappLink);
                     setIsSupportMenuOpen(false);
                   }}
-                  className="w-12 h-12 rounded-full bg-[#25D366] text-white flex items-center justify-center shadow-lg shadow-green-600/30 border border-green-400/20"
+                  className="w-12 h-12 rounded-full bg-[#25D366] text-white flex items-center justify-center shadow-lg shadow-green-600/30 border border-green-400/20 shrink-0"
                 >
                   <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
                     <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.966C16.588 1.974 14.116 1.05 11.752 1.05c-5.444 0-9.87 4.372-9.873 9.802-.001 1.77.478 3.497 1.388 5.041l-.95 3.468 3.73-.967z"/>
