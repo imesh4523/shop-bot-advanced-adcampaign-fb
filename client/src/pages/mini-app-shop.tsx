@@ -542,7 +542,7 @@ export default function MiniAppShop() {
   const [depositAmount, setDepositAmount] = useState("10.00");
   const [depositMethod, setDepositMethod] = useState<"stripe" | "trc20" | "aptos" | "binance">("binance");
   const [selectedDepositCurrency, setSelectedDepositCurrency] = useState<"USD" | "LKR" | "USDT" | "TRX">("USD");
-  const [activeDeposit, setActiveDeposit] = useState<{ paymentId: number; walletAddress: string; amount: number; method: string; remark?: string; currency?: string; exchangeRate?: string } | null>(null);
+  const [activeDeposit, setActiveDeposit] = useState<{ paymentId: number; walletAddress: string; amount: number; method: string; remark?: string; currency?: string; exchangeRate?: string; stripeUrl?: string } | null>(null);
   const [txidInput, setTxidInput] = useState("");
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
 
@@ -661,8 +661,16 @@ export default function MiniAppShop() {
       const data = await res.json();
 
       if (depositMethod === 'stripe') {
-        toast({ title: "Redirection", description: "Redirecting you to Stripe checkout..." });
-        setIsDepositModalOpen(false);
+        toast({ title: "Redirection", description: "Opening Stripe checkout..." });
+        const chargedAmountCents = Math.round(amt * 100 * 1.045 + 30);
+        setActiveDeposit({
+          paymentId: data.paymentId || 0,
+          walletAddress: "",
+          amount: chargedAmountCents / 100,
+          method: "stripe",
+          currency: selectedDepositCurrency,
+          stripeUrl: data.url
+        });
         openExternalLink(data.url);
       } else {
         setActiveDeposit({
@@ -2866,10 +2874,10 @@ export default function MiniAppShop() {
               </div>
               <div className="text-center">
                 <DialogTitle className="text-2xl font-black tracking-tighter uppercase italic">
-                  {activeDeposit ? "Verify Crypto Payment" : "Top Up Balance"}
+                  {activeDeposit ? (activeDeposit.method === 'stripe' ? "Stripe Checkout" : "Verify Crypto Payment") : "Top Up Balance"}
                 </DialogTitle>
                 <DialogDescription className="text-xs font-bold uppercase tracking-widest text-neutral-400 dark:text-neutral-500 mt-1">
-                  {activeDeposit ? "Submit transaction details" : "Select amount and method"}
+                  {activeDeposit ? (activeDeposit.method === 'stripe' ? "Complete Card Payment" : "Submit transaction details") : "Select amount and method"}
                 </DialogDescription>
                 {!activeDeposit && (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
@@ -3085,6 +3093,46 @@ export default function MiniAppShop() {
                     onClick={handleCreateDeposit}
                   >
                     Continue to Pay
+                  </Button>
+                </DialogFooter>
+              </div>
+            ) : activeDeposit.method === 'stripe' ? (
+              <div className="py-4 space-y-6 text-center">
+                <div className="flex justify-center">
+                  <div className="w-16 h-16 rounded-3xl bg-purple-50 dark:bg-purple-950/50 flex items-center justify-center text-[#635BFF] shadow-inner">
+                    <svg viewBox="0 0 24 24" className="w-8 h-8 fill-current" xmlns="http://www.w3.org/2000/svg">
+                      <title>Stripe</title>
+                      <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.594-7.305h.003z"/>
+                    </svg>
+                  </div>
+                </div>
+                
+                <div className="space-y-1">
+                  <h3 className="text-sm font-black uppercase tracking-wider text-neutral-400">Total Charged</h3>
+                  <p className="font-mono text-2xl font-black text-neutral-900 dark:text-white">${activeDeposit.amount.toFixed(2)} USD</p>
+                </div>
+
+                <div className="bg-purple-950/10 border border-purple-500/20 p-4 rounded-2xl text-[10px] uppercase font-black tracking-widest text-purple-400 text-center leading-relaxed max-w-[280px] mx-auto">
+                  ⚠️ If checkout didn't open automatically, click button below to pay.
+                </div>
+
+                <DialogFooter className="flex gap-3 pt-4">
+                  <Button 
+                    variant="ghost" 
+                    className="flex-1 h-14 rounded-2xl font-black uppercase tracking-widest text-neutral-400 hover:bg-neutral-50 dark:hover:bg-white/5"
+                    onClick={() => setActiveDeposit(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      if (activeDeposit.stripeUrl) {
+                        openExternalLink(activeDeposit.stripeUrl);
+                      }
+                    }}
+                    className="flex-1 h-14 rounded-2xl bg-[#635BFF] hover:bg-[#5b54e8] text-white font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-2"
+                  >
+                    <span>Pay with Card</span>
                   </Button>
                 </DialogFooter>
               </div>
