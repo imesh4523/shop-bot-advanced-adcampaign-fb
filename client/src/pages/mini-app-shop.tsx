@@ -405,6 +405,48 @@ function hexToHsl(hex: string): string {
   return `${h} ${s}% ${l}%`;
 }
 
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.02,
+    }
+  },
+  exit: {
+    opacity: 0,
+    transition: {
+      staggerChildren: 0.05,
+      staggerDirection: -1,
+      when: "afterChildren"
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 15, scale: 0.8 },
+  visible: { 
+    opacity: 1, 
+    y: 0, 
+    scale: 1,
+    transition: {
+      type: "spring",
+      stiffness: 300,
+      damping: 20
+    }
+  },
+  exit: { 
+    opacity: 0, 
+    y: 10, 
+    scale: 0.8,
+    transition: {
+      duration: 0.15,
+      ease: "easeOut"
+    }
+  }
+};
+
 export default function MiniAppShop() {
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
@@ -2708,7 +2750,7 @@ export default function MiniAppShop() {
                             <div className={`max-w-[85%] p-3 rounded-2xl text-[11px] leading-relaxed ${
                               !isAdmin 
                                 ? 'bg-primary text-white rounded-tr-none shadow-lg' 
-                                : 'bg-gradient-to-br from-purple-600 to-indigo-700 text-white rounded-tl-none border border-white/5 shadow-md'
+                                : 'bg-white/5 text-white/90 border border-white/10 rounded-tl-none'
                             }`}>
                               {msg.attachmentUrl && msg.attachmentType === "image" && (
                                 <div className="mb-2 max-w-full overflow-hidden rounded-xl">
@@ -3409,14 +3451,32 @@ export default function MiniAppShop() {
         <AnimatePresence>
           {isSupportMenuOpen && !isChatOpen && (
             <motion.div
-              initial={{ opacity: 0, y: 15, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 15, scale: 0.9 }}
-              transition={{ type: "spring", stiffness: 350, damping: 25 }}
-              className="flex flex-col items-end gap-3 mb-3"
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="absolute bottom-16 right-0 flex flex-col-reverse items-end gap-3 pr-1"
             >
+              {/* Live Support Agent Option */}
+              <motion.div variants={itemVariants} className="flex items-center gap-2.5 group">
+                <span className="text-[9px] font-black uppercase text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/5 shadow-md">
+                  Live Agent
+                </span>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => {
+                    setIsChatOpen(true);
+                    setIsSupportMenuOpen(false);
+                  }}
+                  className="w-12 h-12 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-lg shadow-purple-600/30 border border-purple-400/20"
+                >
+                  <MessageSquare className="w-5 h-5" />
+                </motion.button>
+              </motion.div>
+
               {/* WhatsApp Option */}
-              <div className="flex items-center gap-2.5 group">
+              <motion.div variants={itemVariants} className="flex items-center gap-2.5 group">
                 <span className="text-[9px] font-black uppercase text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/5 shadow-md">
                   WhatsApp Support
                 </span>
@@ -3433,25 +3493,7 @@ export default function MiniAppShop() {
                     <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.966C16.588 1.974 14.116 1.05 11.752 1.05c-5.444 0-9.87 4.372-9.873 9.802-.001 1.77.478 3.497 1.388 5.041l-.95 3.468 3.73-.967z"/>
                   </svg>
                 </motion.button>
-              </div>
-
-              {/* Live Support Agent Option */}
-              <div className="flex items-center gap-2.5 group">
-                <span className="text-[9px] font-black uppercase text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/5 shadow-md">
-                  Live Agent
-                </span>
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => {
-                    setIsChatOpen(true);
-                    setIsSupportMenuOpen(false);
-                  }}
-                  className="w-12 h-12 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-lg shadow-purple-600/30 border border-purple-400/20"
-                >
-                  <MessageSquare className="w-5 h-5" />
-                </motion.button>
-              </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>

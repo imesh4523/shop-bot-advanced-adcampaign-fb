@@ -2323,10 +2323,11 @@ export async function registerRoutes(
         }
 
         // Fetch exchange rate settings for the product currency (USD base)
+        const prodCurrency = product.currency || 'USD';
         const currencySetting = await tx.query.settings.findFirst({
-          where: eq(settings.key, `CURRENCY_RATE_${product.currency || 'USD'}`)
+          where: eq(settings.key, `CURRENCY_RATE_${prodCurrency}`)
         });
-        const rate = currencySetting ? parseFloat(currencySetting.value) : 1.0;
+        const rate = currencySetting ? parseFloat(currencySetting.value) : (prodCurrency === 'LKR' ? 300.0 : 1.0);
         
         const totalPriceInProductCurrency = product.price * quantity;
         const totalPriceInUsdCents = Math.round(totalPriceInProductCurrency / rate);
@@ -2343,7 +2344,7 @@ export async function registerRoutes(
           const payCurrencySetting = await tx.query.settings.findFirst({
             where: eq(settings.key, `CURRENCY_RATE_${payCurrency}`)
           });
-          const payRate = payCurrencySetting ? parseFloat(payCurrencySetting.value) : 1.0;
+          const payRate = payCurrencySetting ? parseFloat(payCurrencySetting.value) : (payCurrency === 'LKR' ? 300.0 : 1.0);
           deductAmount = Math.round((totalPriceInUsdCents / 100) * payRate * 100);
         }
 
@@ -2523,7 +2524,7 @@ export async function registerRoutes(
         const currencySetting = await tx.query.settings.findFirst({
           where: eq(settings.key, `CURRENCY_RATE_${productCurrency}`)
         });
-        const rate = currencySetting ? parseFloat(currencySetting.value) : 1.0;
+        const rate = currencySetting ? parseFloat(currencySetting.value) : (productCurrency === 'LKR' ? 300.0 : 1.0);
         const priceInUsdCents = Math.round(offer.price / rate);
 
         // Deduce payment currency
@@ -2538,7 +2539,7 @@ export async function registerRoutes(
           const payCurrencySetting = await tx.query.settings.findFirst({
             where: eq(settings.key, `CURRENCY_RATE_${payCurrency}`)
           });
-          const payRate = payCurrencySetting ? parseFloat(payCurrencySetting.value) : 1.0;
+          const payRate = payCurrencySetting ? parseFloat(payCurrencySetting.value) : (payCurrency === 'LKR' ? 300.0 : 1.0);
           deductAmount = Math.round((priceInUsdCents / 100) * payRate * 100);
         }
 

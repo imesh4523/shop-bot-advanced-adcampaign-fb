@@ -97391,10 +97391,11 @@ ${extraInstructions}
         if (!user || !product) {
           throw new Error("User or product not found");
         }
+        const prodCurrency = product.currency || "USD";
         const currencySetting = await tx.query.settings.findFirst({
-          where: eq(settings.key, `CURRENCY_RATE_${product.currency || "USD"}`)
+          where: eq(settings.key, `CURRENCY_RATE_${prodCurrency}`)
         });
-        const rate = currencySetting ? parseFloat(currencySetting.value) : 1;
+        const rate = currencySetting ? parseFloat(currencySetting.value) : prodCurrency === "LKR" ? 300 : 1;
         const totalPriceInProductCurrency = product.price * quantity;
         const totalPriceInUsdCents = Math.round(totalPriceInProductCurrency / rate);
         let payCurrency = (req.body.currency || product.currency || "USD").toUpperCase();
@@ -97406,7 +97407,7 @@ ${extraInstructions}
           const payCurrencySetting = await tx.query.settings.findFirst({
             where: eq(settings.key, `CURRENCY_RATE_${payCurrency}`)
           });
-          const payRate = payCurrencySetting ? parseFloat(payCurrencySetting.value) : 1;
+          const payRate = payCurrencySetting ? parseFloat(payCurrencySetting.value) : payCurrency === "LKR" ? 300 : 1;
           deductAmount = Math.round(totalPriceInUsdCents / 100 * payRate * 100);
         }
         const availableItems = await tx.select().from(credentials).where(and(eq(credentials.productId, productId), eq(credentials.status, "available"))).limit(quantity).for("update", { skipLocked: true });
@@ -97532,7 +97533,7 @@ Thank you for shopping with us! <tg-emoji emoji-id="5456343263340405032">\u{1F6C
         const currencySetting = await tx.query.settings.findFirst({
           where: eq(settings.key, `CURRENCY_RATE_${productCurrency}`)
         });
-        const rate = currencySetting ? parseFloat(currencySetting.value) : 1;
+        const rate = currencySetting ? parseFloat(currencySetting.value) : productCurrency === "LKR" ? 300 : 1;
         const priceInUsdCents = Math.round(offer.price / rate);
         let payCurrency = (req.body.currency || productCurrency || "USD").toUpperCase();
         if (!["USD", "LKR", "USDT", "TRX"].includes(payCurrency)) {
@@ -97543,7 +97544,7 @@ Thank you for shopping with us! <tg-emoji emoji-id="5456343263340405032">\u{1F6C
           const payCurrencySetting = await tx.query.settings.findFirst({
             where: eq(settings.key, `CURRENCY_RATE_${payCurrency}`)
           });
-          const payRate = payCurrencySetting ? parseFloat(payCurrencySetting.value) : 1;
+          const payRate = payCurrencySetting ? parseFloat(payCurrencySetting.value) : payCurrency === "LKR" ? 300 : 1;
           deductAmount = Math.round(priceInUsdCents / 100 * payRate * 100);
         }
         let updatedUser;
