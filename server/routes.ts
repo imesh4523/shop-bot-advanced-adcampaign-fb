@@ -1143,15 +1143,21 @@ export async function registerRoutes(
       const faq = faqSetting?.value || "No special instructions. Direct them to support if needed.";
       const extraInstructions = extraInstructionsSetting?.value || "";
       const lkrRate = parseFloat(lkrRateSetting?.value || "0") || 0;
+      const effectiveLkrRate = lkrRate > 0 ? lkrRate : await getLiveLkrRate();
 
-      // Helper: format price in both USD and LKR
-      const formatPrice = (priceInCents: number): string => {
-        const usd = (priceInCents / 100).toFixed(2);
-        if (lkrRate > 0) {
-          const lkr = ((priceInCents / 100) * lkrRate).toFixed(2);
+      // Helper: format price in both USD and LKR based on the source currency
+      const formatProductPrice = (priceInCents: number, currency: string = "USD"): string => {
+        const cur = (currency || "USD").toUpperCase();
+        if (cur === "LKR") {
+          const lkr = (priceInCents / 100).toFixed(2);
+          const usd = ((priceInCents / 100) / effectiveLkrRate).toFixed(2);
+          return `$${usd} USD (Rs. ${lkr} LKR)`;
+        } else {
+          // Default to USD source
+          const usd = (priceInCents / 100).toFixed(2);
+          const lkr = ((priceInCents / 100) * effectiveLkrRate).toFixed(2);
           return `$${usd} USD (Rs. ${lkr} LKR)`;
         }
-        return `$${usd} USD`;
       };
 
       const availableProducts = await Promise.all(allProducts.map(async p => {
@@ -1170,16 +1176,14 @@ export async function registerRoutes(
       let systemPrompt = `You are the AI Support Concierge (live chat support agent) for our Telegram Mini App store, "${storeName}".\n`;
       systemPrompt += `Your primary goal is to help users browse available products, check special bundle offers, read FAQs, and assist them in making purchases.\n`;
       systemPrompt += `Be friendly, helpful, polite, and reply to the user in their language (or default to English). Keep your responses concise and well-structured, suitable for mobile/chat views.\n\n`;
-      if (lkrRate > 0) {
-        systemPrompt += `CURRENCY INFO: Current LKR exchange rate is 1 USD = ${lkrRate} LKR (Sri Lankan Rupees). ALWAYS show prices in BOTH USD ($) AND LKR (Rs.) when answering any price-related question. Example format: "$10.00 USD (Rs. ${(10 * lkrRate).toFixed(2)} LKR)".\n\n`;
-      }
+      systemPrompt += `CURRENCY INFO: Current LKR exchange rate is 1 USD = ${effectiveLkrRate} LKR (Sri Lankan Rupees). ALWAYS show prices in BOTH USD ($) AND LKR (Rs.) when answering any price-related question. Example format: "$10.00 USD (Rs. ${(10 * effectiveLkrRate).toFixed(2)} LKR)".\n\n`;
 
       systemPrompt += `AVAILABLE PRODUCTS / CLOUD ACCOUNTS:\n`;
       if (inStock.length === 0) {
         systemPrompt += `- No individual accounts currently in stock.\n`;
       } else {
         inStock.forEach(p => {
-          systemPrompt += `- [ID: ${p.id}] ${p.type} | ${p.name}: ${formatPrice(p.price)} (In Stock: ${p.stockCount} units)\n`;
+          systemPrompt += `- [ID: ${p.id}] ${p.type} | ${p.name}: ${formatProductPrice(p.price, p.currency)} (In Stock: ${p.stockCount} units)\n`;
         });
       }
       systemPrompt += `\n`;
@@ -1190,7 +1194,8 @@ export async function registerRoutes(
       } else {
         activeOffers.forEach(o => {
           const expiresStr = o.expiresAt ? ` (Expires: ${new Date(o.expiresAt).toLocaleString()})` : "";
-          systemPrompt += `- ${o.name}: Bundle of ${o.bundleQuantity} units of product ID ${o.productId} for ${formatPrice(o.price)}${expiresStr}\n`;
+          const prodCurrency = (o as any).product?.currency || "USD";
+          systemPrompt += `- ${o.name}: Bundle of ${o.bundleQuantity} units of product ID ${o.productId} for ${formatProductPrice(o.price, prodCurrency)}${expiresStr}\n`;
         });
       }
       systemPrompt += `\n`;

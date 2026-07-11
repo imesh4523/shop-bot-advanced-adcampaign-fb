@@ -108,6 +108,8 @@ export const api = {
           dailySales: z.number(),
           totalRevenue: z.number(),
           dailyRevenue: z.number(),
+          totalRevenueLkr: z.number(),
+          dailyRevenueLkr: z.number(),
           availableProducts: z.number(),
         }),
       },

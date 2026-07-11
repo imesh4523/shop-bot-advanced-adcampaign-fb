@@ -114,12 +114,19 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
-          title="Daily Revenue"
+          title="Daily Revenue (USD)"
           value={stats ? `$${(stats.dailyRevenue / 100).toFixed(2)}` : "$0.00"}
           icon={TrendingUp}
           description="Last 24 hours"
+          loading={statsLoading}
+        />
+        <StatsCard
+          title="Daily Revenue (LKR)"
+          value={stats ? `Rs. ${( (stats.dailyRevenueLkr || 0) / 100).toFixed(2)}` : "Rs. 0.00"}
+          icon={TrendingUp}
+          description="Last 24 hours LKR"
           loading={statsLoading}
         />
         <StatsCard
@@ -130,10 +137,24 @@ export default function Dashboard() {
           loading={statsLoading}
         />
         <StatsCard
-          title="Total Revenue"
+          title="Daily Visitors"
+          value={trafficStats?.dailyUniqueVisitors?.toString() ?? "0"}
+          icon={Users}
+          description="Unique visitors today"
+          loading={trafficLoading}
+        />
+        <StatsCard
+          title="Total Revenue (USD)"
           value={stats ? `$${(stats.totalRevenue / 100).toFixed(2)}` : "$0.00"}
           icon={DollarSign}
-          description="Total gross revenue"
+          description="Total USD gross revenue"
+          loading={statsLoading}
+        />
+        <StatsCard
+          title="Total Revenue (LKR)"
+          value={stats ? `Rs. ${( (stats.totalRevenueLkr || 0) / 100).toFixed(2)}` : "Rs. 0.00"}
+          icon={DollarSign}
+          description="Total LKR gross revenue"
           loading={statsLoading}
         />
         <StatsCard
@@ -142,13 +163,6 @@ export default function Dashboard() {
           icon={Package}
           description="Total successful orders"
           loading={statsLoading}
-        />
-        <StatsCard
-          title="Daily Visitors"
-          value={trafficStats?.dailyUniqueVisitors?.toString() ?? "0"}
-          icon={Users}
-          description="Unique visitors today"
-          loading={trafficLoading}
         />
         <StatsCard
           title="Daily Page Views"

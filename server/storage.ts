@@ -116,7 +116,7 @@ export interface IStorage {
   deleteBroadcastMessage(id: number): Promise<void>;
 
   // Stats
-  getStats(): Promise<{ totalSales: number; dailySales: number; totalRevenue: number; dailyRevenue: number; availableProducts: number }>;
+  getStats(): Promise<{ totalSales: number; dailySales: number; totalRevenue: number; dailyRevenue: number; totalRevenueLkr: number; dailyRevenueLkr: number; availableProducts: number }>;
   recordTraffic(ip: string, path: string, userAgent: string | null): Promise<void>;
   getTrafficStats(): Promise<{ dailyUniqueVisitors: number; dailyPageViews: number; totalPageViews: number; totalUniqueVisitors: number; chartData: { name: string; visitors: number; views: number }[] }>;
 
@@ -509,7 +509,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Stats
-  async getStats(): Promise<{ totalSales: number; dailySales: number; totalRevenue: number; dailyRevenue: number; availableProducts: number }> {
+  async getStats(): Promise<{ totalSales: number; dailySales: number; totalRevenue: number; dailyRevenue: number; totalRevenueLkr: number; dailyRevenueLkr: number; availableProducts: number }> {
     const [sales] = await db.select({ count: count() }).from(orders);
     
     // Daily sales (last 24 hours)
@@ -518,31 +518,64 @@ export class DatabaseStorage implements IStorage {
       .from(orders)
       .where(sql`${orders.createdAt} >= ${twentyFourHoursAgo}`);
 
-    // Total revenue
-    const revenueResult = await db.select({
-      total: sql<number>`COALESCE(SUM(${products.price}), 0)`
-    })
-    .from(orders)
-    .innerJoin(products, eq(orders.productId, products.id));
-
-    // Daily revenue (last 24 hours)
-    const dailyRevenueResult = await db.select({
+    // Total revenue USD
+    const revenueUsdResult = await db.select({
       total: sql<number>`COALESCE(SUM(${products.price}), 0)`
     })
     .from(orders)
     .innerJoin(products, eq(orders.productId, products.id))
-    .where(sql`${orders.createdAt} >= ${twentyFourHoursAgo}`);
+    .where(or(
+      isNull(products.currency),
+      sql`${products.currency} != 'LKR'`
+    ));
 
-    const totalRevenue = Number(revenueResult[0]?.total || 0);
-    const dailyRevenue = Number(dailyRevenueResult[0]?.total || 0);
+    // Daily revenue USD (last 24 hours)
+    const dailyRevenueUsdResult = await db.select({
+      total: sql<number>`COALESCE(SUM(${products.price}), 0)`
+    })
+    .from(orders)
+    .innerJoin(products, eq(orders.productId, products.id))
+    .where(and(
+      sql`${orders.createdAt} >= ${twentyFourHoursAgo}`,
+      or(
+        isNull(products.currency),
+        sql`${products.currency} != 'LKR'`
+      )
+    ));
+
+    // Total revenue LKR
+    const revenueLkrResult = await db.select({
+      total: sql<number>`COALESCE(SUM(${products.price}), 0)`
+    })
+    .from(orders)
+    .innerJoin(products, eq(orders.productId, products.id))
+    .where(eq(products.currency, 'LKR'));
+
+    // Daily revenue LKR (last 24 hours)
+    const dailyRevenueLkrResult = await db.select({
+      total: sql<number>`COALESCE(SUM(${products.price}), 0)`
+    })
+    .from(orders)
+    .innerJoin(products, eq(orders.productId, products.id))
+    .where(and(
+      sql`${orders.createdAt} >= ${twentyFourHoursAgo}`,
+      eq(products.currency, 'LKR')
+    ));
+
+    const totalRevenueUsd = Number(revenueUsdResult[0]?.total || 0);
+    const dailyRevenueUsd = Number(dailyRevenueUsdResult[0]?.total || 0);
+    const totalRevenueLkr = Number(revenueLkrResult[0]?.total || 0);
+    const dailyRevenueLkr = Number(dailyRevenueLkrResult[0]?.total || 0);
 
     const [available] = await db.select({ count: count() }).from(products).where(eq(products.status, "available"));
 
     return {
       totalSales: sales.count,
       dailySales: dailySalesResult.count,
-      totalRevenue: totalRevenue,
-      dailyRevenue: dailyRevenue,
+      totalRevenue: totalRevenueUsd,
+      dailyRevenue: dailyRevenueUsd,
+      totalRevenueLkr: totalRevenueLkr,
+      dailyRevenueLkr: dailyRevenueLkr,
       availableProducts: available.count,
     };
   }
