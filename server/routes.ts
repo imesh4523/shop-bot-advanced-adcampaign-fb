@@ -4354,10 +4354,11 @@ app.get("/api/support/messages/:telegramId", isAuth, async (req, res) => {
     const { telegramId } = req.params;
     let messages = await storage.getSupportMessages(telegramId);
 
-    // Auto-inject agent joined system message if last message is from user
+    // Auto-inject agent joined system message if last message is from user and not already injected
     if (messages.length > 0) {
       const lastMsg = messages[messages.length - 1];
-      if (lastMsg.sender === "user" && !lastMsg.message.includes("Support Agent has joined")) {
+      const hasJoinedMsg = messages.some(m => m.message.includes("Support Agent has joined"));
+      if (lastMsg.sender === "user" && !hasJoinedMsg) {
         const joinMsg = await storage.saveSupportMessage({
           telegramId,
           message: "👋 Support Agent has joined the chat. How can we assist you?",
