@@ -21,6 +21,7 @@ import {
   ExternalLink,
   ChevronDown,
   MessageCircle,
+  MessageSquare,
   Send,
   X,
   Minimize2,
