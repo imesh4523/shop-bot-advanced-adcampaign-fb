@@ -95874,6 +95874,47 @@ async function registerRoutes(httpServer2, app2, io2) {
   });
   initTelegramClientService(io2);
   initForwardService(io2);
+  io2.on("connection", (socket) => {
+    socket.on("join-admin-calls", () => {
+      socket.join("admins");
+    });
+    socket.on("call-user", (data) => {
+      socket.to("admins").emit("incoming-call", {
+        from: socket.id,
+        offer: data.offer,
+        callerName: data.callerName,
+        callerId: data.callerId
+      });
+    });
+    socket.on("accept-call", (data) => {
+      io2.to(data.to).emit("call-accepted", {
+        answer: data.answer,
+        from: socket.id
+      });
+    });
+    socket.on("reject-call", (data) => {
+      io2.to(data.to).emit("call-rejected", {
+        from: socket.id
+      });
+    });
+    socket.on("end-call", (data) => {
+      io2.to(data.to).emit("call-ended", {
+        from: socket.id
+      });
+    });
+    socket.on("ice-candidate", (data) => {
+      io2.to(data.to).emit("ice-candidate", {
+        candidate: data.candidate,
+        from: socket.id
+      });
+    });
+    socket.on("mute-status", (data) => {
+      io2.to(data.to).emit("peer-mute-status", {
+        isMuted: data.isMuted,
+        from: socket.id
+      });
+    });
+  });
   const sessionTtl = 7 * 24 * 60 * 60 * 1e3;
   const pgStore = (0, import_connect_pg_simple.default)(import_express_session.default);
   const sessionStore = new pgStore({

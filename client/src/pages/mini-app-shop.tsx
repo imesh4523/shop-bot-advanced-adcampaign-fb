@@ -30,7 +30,11 @@ import {
   Database,
   Paperclip,
   FileText,
-  Lock
+  Lock,
+  Phone,
+  PhoneOff,
+  Mic,
+  MicOff
 } from "lucide-react";
 
 import { format } from "date-fns";
@@ -579,6 +583,180 @@ export default function MiniAppShop() {
   const [selectedOffer, setSelectedOffer] = useState<(SpecialOffer & { product?: any }) | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [activeTutorial, setActiveTutorial] = useState<"buy" | "deposit" | null>(null);
+
+  // WebRTC Call States & Refs
+  const [callState, setCallState] = useState<"idle" | "calling" | "ringing" | "connected" | "ended">("idle");
+  const [isCallMuted, setIsCallMuted] = useState(false);
+  const [callDuration, setCallDuration] = useState(0);
+  const callSocketRef = useRef<any>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const durationTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const cleanUpCall = () => {
+    setCallState("idle");
+    setIsCallMuted(false);
+    setCallDuration(0);
+    
+    if (durationTimerRef.current) {
+      clearInterval(durationTimerRef.current);
+      durationTimerRef.current = null;
+    }
+    
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
+    }
+    
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    
+    if (callSocketRef.current) {
+      callSocketRef.current.disconnect();
+      callSocketRef.current = null;
+    }
+  };
+
+  const endActiveCall = () => {
+    if (callSocketRef.current) {
+      const target = callSocketRef.current.adminSocketId || "admins";
+      callSocketRef.current.emit("end-call", { to: target });
+    }
+    cleanUpCall();
+  };
+
+  const toggleCallMute = () => {
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setIsCallMuted(!audioTrack.enabled);
+        
+        if (callSocketRef.current) {
+          const target = callSocketRef.current.adminSocketId || "admins";
+          callSocketRef.current.emit("mute-status", {
+            to: target,
+            isMuted: !audioTrack.enabled
+          });
+        }
+      }
+    }
+  };
+
+  const startVoiceCall = async () => {
+    setCallState("calling");
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localStreamRef.current = stream;
+    } catch (err) {
+      toast({
+        title: "Microphone Access Denied",
+        description: "Please allow microphone access to make voice calls.",
+        variant: "destructive"
+      });
+      setCallState("idle");
+      return;
+    }
+
+    const socket = io();
+    callSocketRef.current = socket;
+
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" }
+      ]
+    });
+    peerConnectionRef.current = pc;
+
+    localStreamRef.current.getTracks().forEach(track => {
+      pc.addTrack(track, localStreamRef.current!);
+    });
+
+    pc.ontrack = (event) => {
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = event.streams[0];
+        remoteAudioRef.current.play().catch(e => console.error("Error playing remote audio:", e));
+      }
+    };
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && callSocketRef.current) {
+        const target = callSocketRef.current.adminSocketId || "admins";
+        callSocketRef.current.emit("ice-candidate", {
+          to: target,
+          candidate: event.candidate
+        });
+      }
+    };
+
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      const callerName = user?.username || user?.firstName || "Customer";
+      socket.emit("call-user", {
+        offer,
+        callerName,
+        callerId: user?.telegramId?.toString() || "guest"
+      });
+    } catch (offerErr) {
+      console.error("Failed to create offer:", offerErr);
+      cleanUpCall();
+      return;
+    }
+
+    socket.on("call-accepted", async (data: { answer: any; from: string }) => {
+      if (callSocketRef.current) {
+        callSocketRef.current.adminSocketId = data.from;
+      }
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+        setCallState("connected");
+        
+        setCallDuration(0);
+        durationTimerRef.current = setInterval(() => {
+          setCallDuration(prev => prev + 1);
+        }, 1000);
+      } catch (err) {
+        console.error("Error setting remote description:", err);
+      }
+    });
+
+    socket.on("call-rejected", () => {
+      setCallState("ended");
+      setTimeout(() => cleanUpCall(), 2000);
+    });
+
+    socket.on("call-ended", () => {
+      setCallState("ended");
+      setTimeout(() => cleanUpCall(), 2000);
+    });
+
+    socket.on("ice-candidate", async (data: { candidate: any }) => {
+      try {
+        if (pc.remoteDescription) {
+          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        }
+      } catch (err) {
+        console.error("Error adding ICE candidate:", err);
+      }
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (durationTimerRef.current) clearInterval(durationTimerRef.current);
+      if (localStreamRef.current) localStreamRef.current.getTracks().forEach(t => t.stop());
+      if (peerConnectionRef.current) peerConnectionRef.current.close();
+      if (callSocketRef.current) callSocketRef.current.disconnect();
+    };
+  }, []);
 
   // Deposit States
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
@@ -3475,6 +3653,24 @@ export default function MiniAppShop() {
                 </motion.button>
               </motion.div>
 
+              {/* Call Support Option */}
+              <motion.div variants={itemVariants} className="flex items-center gap-2.5 group">
+                <span className="text-[9px] font-black uppercase text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/5 shadow-md whitespace-nowrap">
+                  Voice Call
+                </span>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => {
+                    startVoiceCall();
+                    setIsSupportMenuOpen(false);
+                  }}
+                  className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-600/30 border border-blue-400/20 shrink-0"
+                >
+                  <Phone className="w-5 h-5" />
+                </motion.button>
+              </motion.div>
+
               {/* WhatsApp Option */}
               <motion.div variants={itemVariants} className="flex items-center gap-2.5 group">
                 <span className="text-[9px] font-black uppercase text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/5 shadow-md whitespace-nowrap">
@@ -3529,6 +3725,92 @@ export default function MiniAppShop() {
           )}
         </motion.button>
       </div>
+
+      {/* Hidden Audio Tag for Remote Stream */}
+      <audio ref={remoteAudioRef} style={{ display: "none" }} />
+
+      {/* WebRTC Calling Overlay Panel */}
+      <AnimatePresence>
+        {callState !== "idle" && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-[#06040a]/95 backdrop-blur-xl z-[9999] flex flex-col justify-between items-center py-16 px-6"
+          >
+            {/* Top Info */}
+            <div className="flex flex-col items-center text-center gap-2 mt-12">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500 bg-blue-500/10 px-4 py-1.5 rounded-full border border-blue-500/20 shadow-lg shadow-blue-500/5">
+                Support Voice Call
+              </span>
+              <h2 className="text-2xl font-black text-white mt-4 tracking-wider">
+                Support Agent
+              </h2>
+              <p className="text-sm font-semibold text-white/50 lowercase tracking-widest mt-1">
+                {callState === "calling" && "Connecting..."}
+                {callState === "ringing" && "Ringing..."}
+                {callState === "connected" && `On Call (${(seconds => {
+                  const m = Math.floor(seconds / 60).toString().padStart(2, "0");
+                  const s = (seconds % 60).toString().padStart(2, "0");
+                  return `${m}:${s}`;
+                })(callDuration)})`}
+                {callState === "ended" && "Call Ended"}
+              </p>
+            </div>
+
+            {/* Pulsing Avatar/Concentric Rings */}
+            <div className="relative w-64 h-64 flex items-center justify-center">
+              {callState !== "ended" && (
+                <>
+                  <motion.div
+                    animate={{ scale: [1, 1.8, 1], opacity: [0.1, 0.4, 0.1] }}
+                    transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                    className="absolute inset-0 bg-blue-600/10 rounded-full"
+                  />
+                  <motion.div
+                    animate={{ scale: [1, 1.4, 1], opacity: [0.2, 0.5, 0.2] }}
+                    transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
+                    className="absolute m-8 inset-0 bg-blue-500/15 rounded-full"
+                  />
+                </>
+              )}
+              <div className="w-32 h-32 rounded-full bg-gradient-to-tr from-blue-700 to-purple-600 border border-blue-400/20 shadow-2xl flex items-center justify-center relative overflow-hidden">
+                <Phone className="w-12 h-12 text-white/90 animate-pulse" />
+              </div>
+            </div>
+
+            {/* Calling Bottom Controls */}
+            <div className="flex flex-col items-center gap-8 w-full max-w-xs mb-10">
+              <div className="flex items-center justify-around w-full gap-4">
+                {/* Mute Button */}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={toggleCallMute}
+                  disabled={callState === "ended"}
+                  className={`w-14 h-14 rounded-full flex items-center justify-center border transition-all duration-300 ${
+                    isCallMuted 
+                      ? "bg-red-500/25 border-red-500/40 text-red-500" 
+                      : "bg-white/5 border-white/10 text-white/80 hover:bg-white/10"
+                  }`}
+                >
+                  {isCallMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+                </motion.button>
+
+                {/* Hang Up Button */}
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={endActiveCall}
+                  className="w-20 h-20 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shadow-2xl shadow-red-600/40 border border-red-500/20"
+                >
+                  <PhoneOff className="w-8 h-8" />
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

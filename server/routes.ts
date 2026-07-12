@@ -454,6 +454,55 @@ export async function registerRoutes(
   // Initialize Telegram Auto-Forward service
   initForwardService(io);
 
+  // WebRTC Audio Call Signalling
+  io.on("connection", (socket) => {
+    socket.on("join-admin-calls", () => {
+      socket.join("admins");
+    });
+
+    socket.on("call-user", (data: { offer: any; callerName: string; callerId: string }) => {
+      socket.to("admins").emit("incoming-call", {
+        from: socket.id,
+        offer: data.offer,
+        callerName: data.callerName,
+        callerId: data.callerId
+      });
+    });
+
+    socket.on("accept-call", (data: { to: string; answer: any }) => {
+      io.to(data.to).emit("call-accepted", {
+        answer: data.answer,
+        from: socket.id
+      });
+    });
+
+    socket.on("reject-call", (data: { to: string }) => {
+      io.to(data.to).emit("call-rejected", {
+        from: socket.id
+      });
+    });
+
+    socket.on("end-call", (data: { to: string }) => {
+      io.to(data.to).emit("call-ended", {
+        from: socket.id
+      });
+    });
+
+    socket.on("ice-candidate", (data: { to: string; candidate: any }) => {
+      io.to(data.to).emit("ice-candidate", {
+        candidate: data.candidate,
+        from: socket.id
+      });
+    });
+
+    socket.on("mute-status", (data: { to: string; isMuted: boolean }) => {
+      io.to(data.to).emit("peer-mute-status", {
+        isMuted: data.isMuted,
+        from: socket.id
+      });
+    });
+  });
+
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
   const pgStore = connectPg(session);
   const sessionStore = new (pgStore as any)({
