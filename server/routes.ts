@@ -9442,5 +9442,16 @@ echo "OpenVPN setup complete: admin password set"
     }
   });
 
+  app.get("/whatsapp", async (req, res) => {
+    try {
+      const setting = await storage.getSetting("WHATSAPP_CONTACT_LINK");
+      const redirectUrl = setting?.value || "https://wa.me/94760895782";
+      res.redirect(redirectUrl);
+    } catch (err) {
+      console.error("Failed to redirect to WhatsApp contact link:", err);
+      res.redirect("https://wa.me/94760895782");
+    }
+  });
+
   return httpServer;
 }
