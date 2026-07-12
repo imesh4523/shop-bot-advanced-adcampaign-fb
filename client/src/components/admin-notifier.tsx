@@ -342,7 +342,11 @@ export function AdminNotifier() {
 
     // Request browser notification permission if not yet decided
     if (window.Notification && window.Notification.permission === 'default') {
-      window.Notification.requestPermission().catch(console.error);
+      window.Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+          setupNativePush();
+        }
+      }).catch(console.error);
     }
 
     const socket = io();

@@ -27,6 +27,26 @@ export default function SupportCallsPage() {
   // Real-time online socket users
   const [onlineUsers, setOnlineUsers] = useState<Map<string, string>>(new Map());
 
+  // Push Permission State
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>(
+    typeof window !== "undefined" && window.Notification ? window.Notification.permission : "default"
+  );
+
+  const requestPushPermission = () => {
+    if (typeof window === "undefined" || !window.Notification) return;
+
+    window.Notification.requestPermission().then(permission => {
+      setPushPermission(permission);
+      if (permission === 'granted') {
+        window.dispatchEvent(new CustomEvent('trigger-push-setup'));
+        toast({
+          title: "Permission Granted",
+          description: "Attempting to register push notifications subscription...",
+        });
+      }
+    }).catch(console.error);
+  };
+
   const { data: users = [], isLoading } = useQuery<TelegramUser[]>({
     queryKey: ["/api/telegram-users"],
   });
@@ -102,6 +122,29 @@ export default function SupportCallsPage() {
           Directly initiate zero-latency voice calls with online customers.
         </p>
       </div>
+
+      {/* Push notification setup notification */}
+      {pushPermission !== "granted" && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 backdrop-blur-md"
+        >
+          <div className="flex items-center gap-3">
+            <Volume2 className="w-5 h-5 text-amber-400 shrink-0 animate-pulse" />
+            <div>
+              <p className="font-bold">Push Notifications Disabled</p>
+              <p className="text-xs text-white/50">You will not receive background alerts when customers start support voice calls.</p>
+            </div>
+          </div>
+          <Button 
+            onClick={requestPushPermission}
+            className="bg-amber-600 hover:bg-amber-500 text-black font-extrabold uppercase text-xs tracking-wider px-6 py-2 rounded-xl shrink-0"
+          >
+            Enable Notifications
+          </Button>
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Dial Board */}
