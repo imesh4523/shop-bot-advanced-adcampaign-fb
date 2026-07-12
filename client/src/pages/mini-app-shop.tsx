@@ -615,8 +615,11 @@ export default function MiniAppShop() {
     }
     
     if (callSocketRef.current) {
-      callSocketRef.current.disconnect();
-      callSocketRef.current = null;
+      callSocketRef.current.off("call-accepted");
+      callSocketRef.current.off("call-rejected");
+      callSocketRef.current.off("ice-candidate");
+      callSocketRef.current.adminSocketId = null;
+      callSocketRef.current.incomingCallOffer = null;
     }
   };
 
@@ -647,6 +650,15 @@ export default function MiniAppShop() {
   };
 
   const startVoiceCall = async () => {
+    if (!callSocketRef.current) {
+      toast({
+        title: "Connection Error",
+        description: "Calling service is not connected yet.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setCallState("calling");
     
     try {
@@ -662,8 +674,7 @@ export default function MiniAppShop() {
       return;
     }
 
-    const socket = io();
-    callSocketRef.current = socket;
+    const socket = callSocketRef.current;
 
     const pc = new RTCPeerConnection({
       iceServers: [
@@ -695,6 +706,16 @@ export default function MiniAppShop() {
       }
     };
 
+    socket.on("ice-candidate", async (data: { candidate: any }) => {
+      try {
+        if (pc.remoteDescription) {
+          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        }
+      } catch (err) {
+        console.error("Error adding ICE candidate:", err);
+      }
+    });
+
     try {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -712,9 +733,7 @@ export default function MiniAppShop() {
     }
 
     socket.on("call-accepted", async (data: { answer: any; from: string }) => {
-      if (callSocketRef.current) {
-        callSocketRef.current.adminSocketId = data.from;
-      }
+      socket.adminSocketId = data.from;
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
         setCallState("connected");
@@ -732,29 +751,135 @@ export default function MiniAppShop() {
       setCallState("ended");
       setTimeout(() => cleanUpCall(), 2000);
     });
+  };
+
+  const declineIncomingCall = () => {
+    if (callSocketRef.current && callSocketRef.current.adminSocketId) {
+      callSocketRef.current.emit("reject-call", { to: callSocketRef.current.adminSocketId });
+    }
+    cleanUpCall();
+  };
+
+  const answerIncomingCall = async () => {
+    if (!callSocketRef.current || !callSocketRef.current.incomingCallOffer) return;
+    
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localStreamRef.current = stream;
+    } catch (err) {
+      toast({
+        title: "Microphone Access Denied",
+        description: "Please allow microphone access to answer the call.",
+        variant: "destructive"
+      });
+      if (callSocketRef.current) {
+        callSocketRef.current.emit("reject-call", { to: callSocketRef.current.adminSocketId });
+      }
+      setCallState("idle");
+      return;
+    }
+
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" }
+      ]
+    });
+    peerConnectionRef.current = pc;
+
+    stream.getTracks().forEach(track => {
+      pc.addTrack(track, stream);
+    });
+
+    pc.ontrack = (event) => {
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = event.streams[0];
+        remoteAudioRef.current.play().catch(e => console.error("Error playing remote audio:", e));
+      }
+    };
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && callSocketRef.current) {
+        callSocketRef.current.emit("ice-candidate", {
+          to: callSocketRef.current.adminSocketId,
+          candidate: event.candidate
+        });
+      }
+    };
+
+    callSocketRef.current.on("ice-candidate", async (iceData: { candidate: any }) => {
+      try {
+        if (pc.remoteDescription) {
+          await pc.addIceCandidate(new RTCIceCandidate(iceData.candidate));
+        }
+      } catch (err) {
+        console.error("Error adding ICE candidate on client:", err);
+      }
+    });
+
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(callSocketRef.current.incomingCallOffer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      callSocketRef.current.emit("accept-call", {
+        to: callSocketRef.current.adminSocketId,
+        answer
+      });
+
+      setCallState("connected");
+      setCallDuration(0);
+      durationTimerRef.current = setInterval(() => {
+        setCallDuration(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error("Error answering WebRTC call:", err);
+      cleanUpCall();
+    }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    
+    const socket = io();
+    callSocketRef.current = socket;
+    
+    socket.emit("register-user", {
+      telegramId: user.telegramId?.toString() || "guest"
+    });
+
+    socket.on("incoming-call", async (data: { from: string; offer: any; callerName: string }) => {
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close();
+        peerConnectionRef.current = null;
+      }
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(t => t.stop());
+        localStreamRef.current = null;
+      }
+      
+      socket.adminSocketId = data.from;
+      socket.incomingCallOffer = data.offer;
+      setCallState("ringing");
+    });
 
     socket.on("call-ended", () => {
       setCallState("ended");
       setTimeout(() => cleanUpCall(), 2000);
     });
 
-    socket.on("ice-candidate", async (data: { candidate: any }) => {
-      try {
-        if (pc.remoteDescription) {
-          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-        }
-      } catch (err) {
-        console.error("Error adding ICE candidate:", err);
-      }
-    });
-  };
+    return () => {
+      socket.disconnect();
+    };
+  }, [user]);
 
   useEffect(() => {
     return () => {
       if (durationTimerRef.current) clearInterval(durationTimerRef.current);
       if (localStreamRef.current) localStreamRef.current.getTracks().forEach(t => t.stop());
       if (peerConnectionRef.current) peerConnectionRef.current.close();
-      if (callSocketRef.current) callSocketRef.current.disconnect();
     };
   }, []);
 
@@ -3781,32 +3906,56 @@ export default function MiniAppShop() {
 
             {/* Calling Bottom Controls */}
             <div className="flex flex-col items-center gap-8 w-full max-w-xs mb-10">
-              <div className="flex items-center justify-around w-full gap-4">
-                {/* Mute Button */}
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={toggleCallMute}
-                  disabled={callState === "ended"}
-                  className={`w-14 h-14 rounded-full flex items-center justify-center border transition-all duration-300 ${
-                    isCallMuted 
-                      ? "bg-red-500/25 border-red-500/40 text-red-500" 
-                      : "bg-white/5 border-white/10 text-white/80 hover:bg-white/10"
-                  }`}
-                >
-                  {isCallMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-                </motion.button>
+              {callState === "ringing" ? (
+                <div className="flex items-center justify-around w-full gap-4">
+                  {/* Decline Button */}
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={declineIncomingCall}
+                    className="flex-1 py-4 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-bold text-sm tracking-wider shadow-lg shadow-red-600/20 border border-red-500/20"
+                  >
+                    Decline
+                  </motion.button>
 
-                {/* Hang Up Button */}
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={endActiveCall}
-                  className="w-20 h-20 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shadow-2xl shadow-red-600/40 border border-red-500/20"
-                >
-                  <PhoneOff className="w-8 h-8" />
-                </motion.button>
-              </div>
+                  {/* Answer Button */}
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={answerIncomingCall}
+                    className="flex-1 py-4 rounded-2xl bg-green-600 hover:bg-green-500 text-white font-bold text-sm tracking-wider shadow-lg shadow-green-600/20 border border-green-500/20"
+                  >
+                    Answer
+                  </motion.button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-around w-full gap-4">
+                  {/* Mute Button */}
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={toggleCallMute}
+                    disabled={callState === "ended"}
+                    className={`w-14 h-14 rounded-full flex items-center justify-center border transition-all duration-300 ${
+                      isCallMuted 
+                        ? "bg-red-500/25 border-red-500/40 text-red-500" 
+                        : "bg-white/5 border-white/10 text-white/80 hover:bg-white/10"
+                    }`}
+                  >
+                    {isCallMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+                  </motion.button>
+
+                  {/* Hang Up Button */}
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={endActiveCall}
+                    className="w-20 h-20 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shadow-2xl shadow-red-600/40 border border-red-500/20"
+                  >
+                    <PhoneOff className="w-8 h-8" />
+                  </motion.button>
+                </div>
+              )}
             </div>
           </motion.div>
         )}

@@ -27,6 +27,7 @@ const BackupPage = lazy(() => import("@/pages/backup-page"));
 const ForwardPage = lazy(() => import("@/pages/forward-page"));
 const DomainEmailPage = lazy(() => import("@/pages/domain-email-page"));
 const SupportChatPage = lazy(() => import("@/pages/support-chat-page"));
+const SupportCallsPage = lazy(() => import("@/pages/support-calls-page"));
 const IpManagerPage = lazy(() => import("@/pages/ip-manager-page"));
 const ImageSectionPage = lazy(() => import("@/pages/image-section-page"));
 const MiniAppShop = lazy(() => import("@/pages/mini-app-shop"));
@@ -179,6 +180,10 @@ function Router() {
 
         <Route path="/main-admin/support">
           <ProtectedRoute component={SupportChatPage} />
+        </Route>
+
+        <Route path="/main-admin/calls">
+          <ProtectedRoute component={SupportCallsPage} />
         </Route>
 
         <Route path="/main-admin/ip-manager">

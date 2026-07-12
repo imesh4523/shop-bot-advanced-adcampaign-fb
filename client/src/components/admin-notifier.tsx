@@ -225,6 +225,94 @@ export function AdminNotifier() {
     }
   };
 
+  const startAdminCall = async (targetTelegramId: string, targetName: string) => {
+    if (activeCallRef.current) {
+      toast({
+        title: "Call in Progress",
+        description: "Please hang up the active call before making a new one.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    toast({
+      title: "Initiating Voice Call",
+      description: `Calling ${targetName}...`,
+    });
+
+    let localStream: MediaStream;
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localStreamRef.current = localStream;
+    } catch (err) {
+      toast({
+        title: "Microphone Access Denied",
+        description: "Please allow microphone access to make voice calls.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" }
+      ]
+    });
+    peerConnectionRef.current = pc;
+
+    localStream.getTracks().forEach(track => {
+      pc.addTrack(track, localStream);
+    });
+
+    const remoteStream = new MediaStream();
+    pc.ontrack = (event) => {
+      event.streams[0].getTracks().forEach(track => remoteStream.addTrack(track));
+      const audio = new Audio();
+      audio.srcObject = remoteStream;
+      audio.play().catch(e => console.error("Error playing remote audio:", e));
+    };
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && socketRef.current) {
+        socketRef.current.emit("ice-candidate", {
+          toTelegramId: targetTelegramId,
+          candidate: event.candidate
+        });
+      }
+    };
+
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      if (socketRef.current) {
+        socketRef.current.emit("call-user", {
+          offer,
+          callerName: "Support Agent",
+          callerId: user?.id?.toString() || "admin",
+          toTelegramId: targetTelegramId
+        });
+      }
+
+      setActiveCall({
+        peerConnection: pc,
+        localStream,
+        remoteStream,
+        callerSocketId: "", 
+        callerName: targetName,
+        duration: 0,
+        isLocalMuted: false,
+        isPeerMuted: false
+      });
+    } catch (err) {
+      console.error("Failed to start admin call:", err);
+      localStream.getTracks().forEach(t => t.stop());
+      setActiveCall(null);
+    }
+  };
+
   // Call duration counter effect
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
@@ -243,6 +331,14 @@ export function AdminNotifier() {
 
   useEffect(() => {
     if (!user) return;
+
+    const handleStartCallEvent = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && customEvent.detail.telegramId) {
+        startAdminCall(customEvent.detail.telegramId, customEvent.detail.name || "Customer");
+      }
+    };
+    window.addEventListener("start-admin-call", handleStartCallEvent);
 
     // Request browser notification permission if not yet decided
     if (window.Notification && window.Notification.permission === 'default') {
@@ -263,6 +359,32 @@ export function AdminNotifier() {
       hangupCall();
       setIncomingCall(null);
       stopRingtone();
+    });
+
+    socket.on("call-accepted", async (data: { answer: any; from: string }) => {
+      if (peerConnectionRef.current) {
+        try {
+          await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
+          setActiveCall(prev => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              callerSocketId: data.from
+            };
+          });
+        } catch (err) {
+          console.error("Error setting remote answer description on admin:", err);
+        }
+      }
+    });
+
+    socket.on("call-rejected", () => {
+      toast({
+        title: "Call Rejected",
+        description: "The customer rejected the call.",
+        variant: "destructive"
+      });
+      hangupCall();
     });
 
     socket.on("peer-mute-status", (data: { isMuted: boolean }) => {
@@ -404,6 +526,7 @@ export function AdminNotifier() {
     return () => {
       socket.disconnect();
       window.removeEventListener('trigger-push-setup', handleTrigger);
+      window.removeEventListener("start-admin-call", handleStartCallEvent);
       
       stopRingtone();
       if (localStreamRef.current) {

@@ -456,8 +456,29 @@ export async function registerRoutes(
 
   // WebRTC Audio Call Signalling
   const activeRingingCalls = new Map<string, { callerSocketId: string; offer: any; callerName: string; callerId: string }>();
+  const activeUserSockets = new Map<string, string>();
 
   io.on("connection", (socket) => {
+    socket.on("register-user", (data: { telegramId: string }) => {
+      activeUserSockets.set(data.telegramId, socket.id);
+      (socket as any).telegramId = data.telegramId;
+      
+      // Notify online admins
+      io.to("admins").emit("user-online-status", {
+        telegramId: data.telegramId,
+        online: true,
+        socketId: socket.id
+      });
+    });
+
+    socket.on("get-online-users", () => {
+      const onlineUsers: { telegramId: string; socketId: string }[] = [];
+      activeUserSockets.forEach((socketId, telegramId) => {
+        onlineUsers.push({ telegramId, socketId });
+      });
+      socket.emit("online-users-list", onlineUsers);
+    });
+
     socket.on("join-admin-calls", () => {
       socket.join("admins");
       
@@ -472,33 +493,58 @@ export async function registerRoutes(
       });
     });
 
-    socket.on("call-user", (data: { offer: any; callerName: string; callerId: string }) => {
-      activeRingingCalls.set(socket.id, {
-        callerSocketId: socket.id,
-        offer: data.offer,
-        callerName: data.callerName,
-        callerId: data.callerId
-      });
+    socket.on("call-user", (data: { offer: any; callerName: string; callerId: string; toSocketId?: string; toTelegramId?: string }) => {
+      let targetSocketId = data.toSocketId;
+      if (!targetSocketId && data.toTelegramId) {
+        targetSocketId = activeUserSockets.get(data.toTelegramId);
+      }
 
-      socket.to("admins").emit("incoming-call", {
-        from: socket.id,
-        offer: data.offer,
-        callerName: data.callerName,
-        callerId: data.callerId
-      });
+      if (targetSocketId) {
+        // Direct targeted call (e.g. Admin calling User)
+        io.to(targetSocketId).emit("incoming-call", {
+          from: socket.id,
+          offer: data.offer,
+          callerName: data.callerName,
+          callerId: data.callerId
+        });
+      } else {
+        // Broadcast call to admins (Customer calling support)
+        activeRingingCalls.set(socket.id, {
+          callerSocketId: socket.id,
+          offer: data.offer,
+          callerName: data.callerName,
+          callerId: data.callerId
+        });
 
-      // Dispatch Web Push Notification redirecting to Support page
-      sendAdminPushNotification(
-        "Incoming Support Call",
-        `Voice call from ${data.callerName}`,
-        "/main-admin/support"
-      ).catch((err) => console.error("Error sending Web Push notification for call:", err));
+        socket.to("admins").emit("incoming-call", {
+          from: socket.id,
+          offer: data.offer,
+          callerName: data.callerName,
+          callerId: data.callerId
+        });
+
+        // Dispatch Web Push Notification redirecting to Support page
+        sendAdminPushNotification(
+          "Incoming Support Call",
+          `Voice call from ${data.callerName}`,
+          "/main-admin/support"
+        ).catch((err) => console.error("Error sending Web Push notification for call:", err));
+      }
     });
 
     const handleCallCleanup = () => {
       if (activeRingingCalls.has(socket.id)) {
         activeRingingCalls.delete(socket.id);
         socket.to("admins").emit("call-ended", { from: socket.id });
+      }
+
+      const typedSocket = socket as any;
+      if (typedSocket.telegramId) {
+        activeUserSockets.delete(typedSocket.telegramId);
+        io.to("admins").emit("user-online-status", {
+          telegramId: typedSocket.telegramId,
+          online: false
+        });
       }
     };
 
