@@ -483,7 +483,7 @@ export function AdminNotifier() {
     });
 
     // 2. Native Web Push (VAPID) for background notifications
-    const setupNativePush = async () => {
+    async function setupNativePush() {
       if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
         console.warn('Push notifications not supported by browser');
         return;
