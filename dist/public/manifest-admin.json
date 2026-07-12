@@ -1,0 +1,21 @@
+{
+  "name": "Shopeefy Admin",
+  "short_name": "Shop Admin",
+  "description": "Shopeefy Admin Dashboard",
+  "start_url": "/main-admin",
+  "display": "standalone",
+  "background_color": "#0a0a0c",
+  "theme_color": "#0a0a0c",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
