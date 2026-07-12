@@ -493,6 +493,9 @@ export function AdminNotifier() {
         // Register Service Worker
         const registration = await navigator.serviceWorker.register('/sw.js');
         
+        // Force update check to ensure latest sw.js code loads immediately
+        await registration.update().catch(err => console.warn('SW update check failed:', err));
+        
         // Wait for it to be active
         await navigator.serviceWorker.ready;
 

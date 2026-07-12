@@ -1,3 +1,13 @@
+self.addEventListener('install', (event) => {
+  console.log('[SW] Service Worker installed');
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  console.log('[SW] Service Worker activated');
+  event.waitUntil(clients.claim());
+});
+
 self.addEventListener('push', (event) => {
   console.log('[SW] Push received:', event);
   if (!event.data) {
@@ -8,13 +18,12 @@ self.addEventListener('push', (event) => {
   try {
     const data = event.data.json();
     console.log('[SW] Push data:', data);
+    
+    // Simplified options to ensure maximum compatibility across Safari/iOS and Chrome/Android
     const options = {
       body: data.body,
       icon: '/logo.png',
       badge: '/logo.png',
-      vibrate: [200, 100, 200, 100, 200],
-      tag: 'admin-alert',
-      renotify: true,
       data: {
         url: data.url || '/'
       }
@@ -22,7 +31,7 @@ self.addEventListener('push', (event) => {
 
     event.waitUntil(
       self.registration.showNotification(data.title, options)
-        .then(() => console.log('[SW] Notification shown'))
+        .then(() => console.log('[SW] Notification shown successfully'))
         .catch(err => console.error('[SW] Notification error:', err))
     );
   } catch (err) {
