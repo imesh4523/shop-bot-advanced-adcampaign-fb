@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
-import { Phone, PhoneOff, Mic, MicOff, Volume2 } from 'lucide-react';
+import { Phone, PhoneOff, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const NOTIFICATION_SOUND_URL = 'https://github.com/shubham-sawant/shopify-chaching-sound/raw/master/shopify-chaching.mp3';
@@ -43,6 +43,8 @@ export function AdminNotifier() {
   const socketRef = useRef<any>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [isSpeakerMuted, setIsSpeakerMuted] = useState(false);
   const ringIntervalRef = useRef<any>(null);
 
   const startRingtone = () => {
@@ -116,6 +118,12 @@ export function AdminNotifier() {
       peerConnectionRef.current = null;
     }
 
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = null;
+      remoteAudioRef.current = null;
+    }
+    setIsSpeakerMuted(false);
+
     setActiveCall(null);
   };
 
@@ -157,8 +165,10 @@ export function AdminNotifier() {
     const remoteStream = new MediaStream();
     pc.ontrack = (event) => {
       event.streams[0].getTracks().forEach(track => remoteStream.addTrack(track));
-      const audio = new Audio();
+      const audio = remoteAudioRef.current || new Audio();
+      remoteAudioRef.current = audio;
       audio.srcObject = remoteStream;
+      audio.muted = isSpeakerMuted;
       audio.play().catch(e => console.error("Error playing remote audio:", e));
     };
 
@@ -269,8 +279,10 @@ export function AdminNotifier() {
     const remoteStream = new MediaStream();
     pc.ontrack = (event) => {
       event.streams[0].getTracks().forEach(track => remoteStream.addTrack(track));
-      const audio = new Audio();
+      const audio = remoteAudioRef.current || new Audio();
+      remoteAudioRef.current = audio;
       audio.srcObject = remoteStream;
+      audio.muted = isSpeakerMuted;
       audio.play().catch(e => console.error("Error playing remote audio:", e));
     };
 
@@ -310,6 +322,13 @@ export function AdminNotifier() {
       console.error("Failed to start admin call:", err);
       localStream.getTracks().forEach(t => t.stop());
       setActiveCall(null);
+    }
+  };
+
+  const toggleSpeakerMute = () => {
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.muted = !remoteAudioRef.current.muted;
+      setIsSpeakerMuted(remoteAudioRef.current.muted);
     }
   };
 
@@ -621,26 +640,39 @@ export function AdminNotifier() {
               </div>
             </div>
 
-            <div className="flex gap-3 justify-between mt-2 pt-2 border-t border-white/5">
-              {/* Mute Button */}
+            <div className="flex gap-2 justify-between mt-2 pt-2 border-t border-white/5">
+              {/* Mute Mic Button */}
               <button
                 onClick={toggleLocalMute}
-                className={`flex-1 py-2 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all ${
+                className={`py-2 px-2.5 rounded-xl border flex items-center justify-center gap-1 text-[11px] font-bold transition-all ${
                   activeCall.isLocalMuted 
                     ? "bg-red-500/25 border-red-500/30 text-red-500 hover:bg-red-500/30" 
                     : "bg-white/5 border-white/10 text-white/80 hover:bg-white/10"
                 }`}
               >
-                {activeCall.isLocalMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                {activeCall.isLocalMuted ? "Unmute" : "Mute"}
+                {activeCall.isLocalMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                {activeCall.isLocalMuted ? "Mic Off" : "Mic On"}
+              </button>
+
+              {/* Mute Speaker Button */}
+              <button
+                onClick={toggleSpeakerMute}
+                className={`py-2 px-2.5 rounded-xl border flex items-center justify-center gap-1 text-[11px] font-bold transition-all ${
+                  isSpeakerMuted 
+                    ? "bg-red-500/25 border-red-500/30 text-red-500 hover:bg-red-500/30" 
+                    : "bg-white/5 border-white/10 text-white/80 hover:bg-white/10"
+                }`}
+              >
+                {isSpeakerMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                {isSpeakerMuted ? "Sound Off" : "Sound On"}
               </button>
 
               {/* End Call Button */}
               <button
                 onClick={hangupCall}
-                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all border border-red-500/20 shadow-lg shadow-red-600/10 flex items-center gap-1"
+                className="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-[11px] font-bold transition-all border border-red-500/20 shadow-lg shadow-red-600/10 flex items-center gap-1"
               >
-                <PhoneOff className="w-4 h-4" />
+                <PhoneOff className="w-3.5 h-3.5" />
                 End
               </button>
             </div>

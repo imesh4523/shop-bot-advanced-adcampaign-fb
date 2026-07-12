@@ -9688,5 +9688,9 @@ echo "OpenVPN setup complete: admin password set"
     }
   });
 
+  app.get("/callsupport", (req, res) => {
+    res.redirect("/?autocall=true");
+  });
+
   return httpServer;
 }

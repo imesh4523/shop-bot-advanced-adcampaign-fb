@@ -34,7 +34,9 @@ import {
   Phone,
   PhoneOff,
   Mic,
-  MicOff
+  MicOff,
+  Volume2,
+  VolumeX
 } from "lucide-react";
 
 import { format } from "date-fns";
@@ -587,6 +589,8 @@ export default function MiniAppShop() {
   // WebRTC Call States & Refs
   const [callState, setCallState] = useState<"idle" | "calling" | "ringing" | "connected" | "ended">("idle");
   const [isCallMuted, setIsCallMuted] = useState(false);
+  const [isSpeakerMuted, setIsSpeakerMuted] = useState(false);
+  const [showAutoCallPrompt, setShowAutoCallPrompt] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const callSocketRef = useRef<any>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
@@ -597,6 +601,7 @@ export default function MiniAppShop() {
   const cleanUpCall = () => {
     setCallState("idle");
     setIsCallMuted(false);
+    setIsSpeakerMuted(false);
     setCallDuration(0);
     
     if (durationTimerRef.current) {
@@ -620,6 +625,13 @@ export default function MiniAppShop() {
       callSocketRef.current.off("ice-candidate");
       callSocketRef.current.adminSocketId = null;
       callSocketRef.current.incomingCallOffer = null;
+    }
+  };
+
+  const toggleSpeakerMute = () => {
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.muted = !remoteAudioRef.current.muted;
+      setIsSpeakerMuted(remoteAudioRef.current.muted);
     }
   };
 
@@ -692,6 +704,7 @@ export default function MiniAppShop() {
     pc.ontrack = (event) => {
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = event.streams[0];
+        remoteAudioRef.current.muted = isSpeakerMuted;
         remoteAudioRef.current.play().catch(e => console.error("Error playing remote audio:", e));
       }
     };
@@ -796,6 +809,7 @@ export default function MiniAppShop() {
     pc.ontrack = (event) => {
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = event.streams[0];
+        remoteAudioRef.current.muted = isSpeakerMuted;
         remoteAudioRef.current.play().catch(e => console.error("Error playing remote audio:", e));
       }
     };
@@ -882,6 +896,20 @@ export default function MiniAppShop() {
       if (peerConnectionRef.current) peerConnectionRef.current.close();
     };
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("autocall") === "true") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("autocall");
+      window.history.replaceState({}, document.title, url.pathname);
+      
+      setTimeout(() => {
+        setShowAutoCallPrompt(true);
+      }, 1000);
+    }
+  }, [user]);
 
   // Deposit States
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
@@ -3930,7 +3958,7 @@ export default function MiniAppShop() {
                 </div>
               ) : (
                 <div className="flex items-center justify-around w-full gap-4">
-                  {/* Mute Button */}
+                  {/* Mute Mic Button */}
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -3945,6 +3973,21 @@ export default function MiniAppShop() {
                     {isCallMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
                   </motion.button>
 
+                  {/* Speaker Toggle Button */}
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={toggleSpeakerMute}
+                    disabled={callState === "ended"}
+                    className={`w-14 h-14 rounded-full flex items-center justify-center border transition-all duration-300 ${
+                      isSpeakerMuted 
+                        ? "bg-red-500/25 border-red-500/40 text-red-500" 
+                        : "bg-white/5 border-white/10 text-white/80 hover:bg-white/10"
+                    }`}
+                  >
+                    {isSpeakerMuted ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
+                  </motion.button>
+
                   {/* Hang Up Button */}
                   <motion.button
                     whileHover={{ scale: 1.1 }}
@@ -3956,6 +3999,73 @@ export default function MiniAppShop() {
                   </motion.button>
                 </div>
               )}
+            </div>
+          </motion.div>
+        )}
+
+        {showAutoCallPrompt && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-[#06040a]/95 backdrop-blur-xl z-[9999] flex flex-col justify-between items-center py-16 px-6"
+          >
+            {/* Top Info */}
+            <div className="flex flex-col items-center text-center gap-2 mt-12">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-500 bg-purple-500/10 px-4 py-1.5 rounded-full border border-purple-500/20 shadow-lg shadow-purple-500/5">
+                Support Calling Line
+              </span>
+              <h2 className="text-2xl font-black text-white mt-4 tracking-wider">
+                Voice Call Center
+              </h2>
+              <p className="text-sm font-semibold text-white/50 lowercase tracking-widest mt-1">
+                Connecting you to an agent...
+              </p>
+            </div>
+
+            {/* Pulsing Avatar/Concentric Rings */}
+            <div className="relative w-64 h-64 flex items-center justify-center">
+              <motion.div
+                animate={{ scale: [1, 1.8, 1], opacity: [0.1, 0.4, 0.1] }}
+                transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                className="absolute inset-0 bg-purple-600/10 rounded-full"
+              />
+              <motion.div
+                animate={{ scale: [1, 1.4, 1], opacity: [0.2, 0.5, 0.2] }}
+                transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
+                className="absolute m-8 inset-0 bg-purple-500/15 rounded-full"
+              />
+              <div className="w-32 h-32 rounded-full bg-gradient-to-tr from-purple-700 to-indigo-600 border border-purple-400/20 shadow-2xl flex items-center justify-center relative overflow-hidden">
+                <Phone className="w-12 h-12 text-white/90 animate-bounce" />
+              </div>
+            </div>
+
+            {/* Calling Bottom Controls */}
+            <div className="flex flex-col items-center gap-8 w-full max-w-xs mb-10">
+              <div className="flex items-center justify-around w-full gap-4">
+                {/* Cancel Button */}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowAutoCallPrompt(false)}
+                  className="flex-1 py-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold text-sm tracking-wider"
+                >
+                  Cancel
+                </motion.button>
+
+                {/* Connect Button */}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    setShowAutoCallPrompt(false);
+                    startVoiceCall();
+                  }}
+                  className="flex-1 py-4 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm tracking-wider shadow-lg shadow-purple-600/20 border border-purple-500/20"
+                >
+                  Connect Call
+                </motion.button>
+              </div>
             </div>
           </motion.div>
         )}
