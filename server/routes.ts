@@ -3531,6 +3531,20 @@ app.delete("/api/credentials/:id", isAuth, async (req, res) => {
   res.status(204).send();
 });
 
+app.post("/api/credentials/bulk-delete", isAuth, async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: "Invalid or empty ids list" });
+    }
+    await db.delete(credentials).where(inArray(credentials.id, ids));
+    res.json({ success: true, message: `Successfully deleted ${ids.length} credentials` });
+  } catch (err: any) {
+    console.error("Bulk delete error:", err);
+    res.status(500).json({ message: err.message || "Failed to bulk delete credentials" });
+  }
+});
+
 app.patch("/api/credentials/:id", isAuth, async (req, res) => {
   try {
     const id = Number(req.params.id);

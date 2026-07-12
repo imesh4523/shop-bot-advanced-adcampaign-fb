@@ -50,6 +50,7 @@ export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const { data: products } = useProducts();
   const [selectedProductId, setSelectedProductId] = useState<string>("all");
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   const { data: credentials, isLoading } = useQuery<Credential[]>({
     queryKey: ["/api/all-credentials"],
@@ -107,6 +108,23 @@ export default function InventoryPage() {
       toast({ title: "Credential deleted" });
     },
   });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      await apiRequest("POST", "/api/credentials/bulk-delete", { ids });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/all-credentials"] });
+      setSelectedIds([]);
+      toast({ title: "Selected credentials deleted successfully" });
+    },
+  });
+
+  const handleBulkDelete = () => {
+    if (confirm(`Are you sure you want to delete ${selectedIds.length} selected items?`)) {
+      bulkDeleteMutation.mutate(selectedIds);
+    }
+  };
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number, data: Partial<InsertCredential> }) => {
@@ -203,8 +221,8 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1 group">
+      <div className="flex flex-col sm:flex-row gap-4 items-center">
+        <div className="relative flex-1 group w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 group-focus-within:text-purple-400 transition-colors" />
           <Input
             placeholder="Search credentials..."
@@ -213,6 +231,18 @@ export default function InventoryPage() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
+        
+        {selectedIds.length > 0 && (
+          <Button
+            onClick={handleBulkDelete}
+            disabled={bulkDeleteMutation.isPending}
+            className="h-11 px-5 rounded-xl bg-red-600/10 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/20 font-black text-xs uppercase tracking-widest transition-all duration-300 w-full sm:w-auto"
+          >
+            {bulkDeleteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+            Delete Selected ({selectedIds.length})
+          </Button>
+        )}
+
         <Select value={selectedProductId} onValueChange={setSelectedProductId}>
           <SelectTrigger className="w-full sm:w-[200px] glass-panel h-11 rounded-xl border-white/10 text-sm text-white">
             <SelectValue placeholder="All Products" />
@@ -230,7 +260,21 @@ export default function InventoryPage() {
         <Table>
           <TableHeader>
             <TableRow className="border-white/5 hover:bg-transparent">
-              <TableHead className="text-white/40 font-bold uppercase tracking-widest text-[10px] pl-6 py-4">Product</TableHead>
+              <TableHead className="w-[50px] pl-6 py-4">
+                <input 
+                  type="checkbox"
+                  className="rounded border-white/10 bg-black/40 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                  checked={filteredCredentials && filteredCredentials.length > 0 && selectedIds.length === filteredCredentials.length}
+                  onChange={(e) => {
+                    if (e.target.checked && filteredCredentials) {
+                      setSelectedIds(filteredCredentials.map(c => c.id));
+                    } else {
+                      setSelectedIds([]);
+                    }
+                  }}
+                />
+              </TableHead>
+              <TableHead className="text-white/40 font-bold uppercase tracking-widest text-[10px] py-4">Product</TableHead>
               <TableHead className="text-white/40 font-bold uppercase tracking-widest text-[10px] py-4">Credentials</TableHead>
               <TableHead className="text-white/40 font-bold uppercase tracking-widest text-[10px] py-4">Status</TableHead>
               <TableHead className="text-white/40 font-bold uppercase tracking-widest text-[10px] text-right pr-6 py-4">Actions</TableHead>
@@ -239,11 +283,11 @@ export default function InventoryPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-12 text-white/20 text-xs">Loading...</TableCell>
+                <TableCell colSpan={5} className="text-center py-12 text-white/20 text-xs">Loading...</TableCell>
               </TableRow>
             ) : filteredCredentials?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="h-48 text-center text-white/20 font-black text-sm uppercase tracking-tighter">
+                <TableCell colSpan={5} className="h-48 text-center text-white/20 font-black text-sm uppercase tracking-tighter">
                   No stock found in inventory.
                 </TableCell>
               </TableRow>
@@ -253,6 +297,20 @@ export default function InventoryPage() {
                 return (
                   <TableRow key={cred.id} className="border-white/5 hover:bg-white/[0.03] transition-all duration-300 group">
                     <TableCell className="pl-6 py-4">
+                      <input 
+                        type="checkbox"
+                        className="rounded border-white/10 bg-black/40 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                        checked={selectedIds.includes(cred.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds(prev => [...prev, cred.id]);
+                          } else {
+                            setSelectedIds(prev => prev.filter(id => id !== cred.id));
+                          }
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell className="py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-400">
                           <Server className="w-4 h-4" />
