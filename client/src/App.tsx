@@ -44,6 +44,13 @@ function PageLoader() {
   );
 }
 
+function WhatsappRedirect() {
+  useEffect(() => {
+    window.location.replace("/whatsapp");
+  }, []);
+  return null;
+}
+
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
 
@@ -102,10 +109,8 @@ function Router() {
           </Suspense>
         </Route>
 
-        <Route path="/customer-feedbacks">
-          <Suspense fallback={<PageLoader />}>
-            <CustomerFeedbacksPublic />
-          </Suspense>
+        <Route path="/whatsapp">
+          <WhatsappRedirect />
         </Route>
 
         <Route path="/main-admin">
