@@ -32,17 +32,20 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data.url;
+  const targetUrl = new URL(event.notification.data.url || '/', self.location.origin).href;
 
   event.waitUntil(
-    clients.matchAll({ type: 'window' }).then((clientList) => {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Reuse any open window on the same origin
       for (const client of clientList) {
-        if (client.url === url && 'focus' in client) {
+        if ('focus' in client) {
+          client.navigate(targetUrl);
           return client.focus();
         }
       }
+      // If no window open, open a new one
       if (clients.openWindow) {
-        return clients.openWindow(url);
+        return clients.openWindow(targetUrl);
       }
     })
   );

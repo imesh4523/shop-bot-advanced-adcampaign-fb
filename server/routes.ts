@@ -527,7 +527,7 @@ export async function registerRoutes(
         sendAdminPushNotification(
           "Incoming Support Call",
           `Voice call from ${data.callerName}`,
-          "/main-admin/support"
+          "/main-admin/calls"
         ).catch((err) => console.error("Error sending Web Push notification for call:", err));
       }
     });
