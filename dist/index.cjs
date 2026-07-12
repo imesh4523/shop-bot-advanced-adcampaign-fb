@@ -103620,8 +103620,99 @@ echo "OpenVPN setup complete: admin password set"
   app2.get("/whatsapp", async (req, res) => {
     try {
       const setting = await storage.getSetting("WHATSAPP_CONTACT_LINK");
-      const redirectUrl = setting?.value || "https://wa.me/94760895782";
-      res.redirect(redirectUrl);
+      const url2 = (setting?.value || "https://wa.me/94760895782").trim();
+      let phone = "";
+      let textParam = "";
+      if (url2.includes("wa.me/")) {
+        const parts = url2.split("wa.me/");
+        if (parts[1]) {
+          const content = parts[1].split("?");
+          phone = content[0].replace(/[^0-9]/g, "");
+          if (content[1] && content[1].includes("text=")) {
+            const m = content[1].match(/text=([^&]+)/);
+            if (m && m[1]) textParam = m[1];
+          }
+        }
+      } else if (url2.includes("phone=")) {
+        const m = url2.match(/phone=([0-9]+)/);
+        if (m && m[1]) phone = m[1];
+        if (url2.includes("text=")) {
+          const tm = url2.match(/text=([^&]+)/);
+          if (tm && tm[1]) textParam = tm[1];
+        }
+      } else {
+        phone = url2.replace(/[^0-9]/g, "");
+      }
+      if (phone.startsWith("0")) {
+        phone = "94" + phone.substring(1);
+      }
+      if (!phone) {
+        phone = "94760895782";
+      }
+      const waAppUrl = `whatsapp://send?phone=${phone}${textParam ? `&text=${textParam}` : ""}`;
+      const waWebUrl = `https://wa.me/${phone}${textParam ? `?text=${textParam}` : ""}`;
+      res.setHeader("Content-Type", "text/html");
+      res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connecting to WhatsApp Support...</title>
+  <style>
+    body {
+      background-color: #06040a;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .spinner {
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top: 3px solid #25D366;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .text {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.6);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="spinner"></div>
+  <div class="text">Connecting to WhatsApp Support...</div>
+
+  <script>
+    const waAppUrl = "${waAppUrl}";
+    const waWebUrl = "${waWebUrl}";
+    
+    // Attempt native app redirection
+    window.location.replace(waAppUrl);
+    
+    // Fallback to web link if native scheme is not handled after 1.5 seconds
+    setTimeout(function() {
+      window.location.replace(waWebUrl);
+    }, 1500);
+  </script>
+</body>
+</html>`);
     } catch (err) {
       console.error("Failed to redirect to WhatsApp contact link:", err);
       res.redirect("https://wa.me/94760895782");
