@@ -24,6 +24,7 @@ import {
   Shield,
   ListOrdered,
   Heart,
+  Phone,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const navigation = [
     { name: 'Dashboard', href: '/main-admin', icon: LayoutDashboard },
     { name: 'Live Support', href: '/main-admin/support', icon: MessageSquare },
+    { name: 'Support Calls', href: '/main-admin/support?tab=calls', icon: Phone },
     { name: 'Broadcast', href: '/main-admin/broadcast', icon: Megaphone },
     { name: 'Email Campaign', href: '/main-admin/email-campaign', icon: Mail },
     { name: 'Products', href: '/main-admin/products', icon: Package },
