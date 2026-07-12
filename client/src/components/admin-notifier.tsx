@@ -2,8 +2,11 @@ import { useEffect, useState, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
-import { Phone, PhoneOff, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Phone, PhoneOff, Mic, MicOff, Volume2 as LucideVolume2, VolumeX as LucideVolumeX } from "lucide-react";
 import { motion, AnimatePresence } from 'framer-motion';
+
+const Volume2 = LucideVolume2;
+const VolumeX = LucideVolumeX;
 
 const NOTIFICATION_SOUND_URL = 'https://github.com/shubham-sawant/shopify-chaching-sound/raw/master/shopify-chaching.mp3';
 
