@@ -517,6 +517,11 @@ export function AdminNotifier() {
             title: "Notifications Enabled",
             description: "You will now receive native push notifications for orders.",
           });
+        } else {
+          toast({
+            title: "Notifications Active",
+            description: "Your notification subscription is already configured and active.",
+          });
         }
 
         // Send subscription to backend

@@ -32,6 +32,55 @@ export default function SupportCallsPage() {
     typeof window !== "undefined" && window.Notification ? window.Notification.permission : "default"
   );
 
+  const [diagnostics, setDiagnostics] = useState<{
+    supported: boolean;
+    permission: string;
+    swRegistered: string;
+    subscriptionActive: string;
+    endpoint: string;
+    error: string;
+  } | null>(null);
+
+  const fetchDiagnostics = async () => {
+    if (typeof window === "undefined") return;
+    const info = {
+      supported: 'serviceWorker' in navigator && 'PushManager' in window,
+      permission: window.Notification ? window.Notification.permission : "not supported",
+      swRegistered: "checking...",
+      subscriptionActive: "checking...",
+      endpoint: "",
+      error: ""
+    };
+
+    if (!info.supported) {
+      info.swRegistered = "no support";
+      info.subscriptionActive = "no support";
+      setDiagnostics(info);
+      return;
+    }
+
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      info.swRegistered = regs.length > 0 ? `active (${regs.length} worker(s))` : "not registered";
+      
+      const readyReg = await navigator.serviceWorker.ready.catch(() => null);
+      if (readyReg) {
+        const sub = await readyReg.pushManager.getSubscription();
+        if (sub) {
+          info.subscriptionActive = "active";
+          info.endpoint = sub.endpoint;
+        } else {
+          info.subscriptionActive = "inactive (no subscription)";
+        }
+      } else {
+        info.subscriptionActive = "inactive (sw not ready)";
+      }
+    } catch (err: any) {
+      info.error = err.message || String(err);
+    }
+    setDiagnostics(info);
+  };
+
   const requestPushPermission = () => {
     if (typeof window === "undefined" || !window.Notification) return;
 
@@ -43,8 +92,13 @@ export default function SupportCallsPage() {
           title: "Permission Granted",
           description: "Attempting to register push notifications subscription...",
         });
+        setTimeout(fetchDiagnostics, 2500);
       }
-    }).catch(console.error);
+      fetchDiagnostics();
+    }).catch(err => {
+      console.error(err);
+      fetchDiagnostics();
+    });
   };
 
   const { data: users = [], isLoading } = useQuery<TelegramUser[]>({
@@ -52,6 +106,7 @@ export default function SupportCallsPage() {
   });
 
   useEffect(() => {
+    fetchDiagnostics();
     const socket = io();
     
     // Request online list on connect
@@ -271,6 +326,73 @@ export default function SupportCallsPage() {
           </Card>
         </div>
       </div>
+
+      {/* Diagnostics panel */}
+      {diagnostics && (
+        <Card className="bg-[#0f0a18]/45 border border-purple-500/10 shadow-2xl backdrop-blur-md mt-8">
+          <CardHeader>
+            <CardTitle className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-purple-400" />
+              Push Notifications Diagnostics
+            </CardTitle>
+            <CardDescription className="text-xs text-white/40">
+              Debug status of the background notification service for this browser/PWA.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className="flex justify-between p-3 rounded-xl bg-black/30 border border-white/5">
+                <span className="text-white/50 font-bold uppercase tracking-wider">Browser Supported:</span>
+                <span className={diagnostics.supported ? "text-green-400 font-bold" : "text-red-400 font-bold"}>
+                  {diagnostics.supported ? "Yes" : "No"}
+                </span>
+              </div>
+              <div className="flex justify-between p-3 rounded-xl bg-black/30 border border-white/5">
+                <span className="text-white/50 font-bold uppercase tracking-wider">Permission:</span>
+                <span className={`font-bold uppercase ${
+                  diagnostics.permission === "granted" ? "text-green-400" :
+                  diagnostics.permission === "denied" ? "text-red-400" : "text-amber-400"
+                }`}>
+                  {diagnostics.permission}
+                </span>
+              </div>
+              <div className="flex justify-between p-3 rounded-xl bg-black/30 border border-white/5">
+                <span className="text-white/50 font-bold uppercase tracking-wider">Service Worker:</span>
+                <span className="text-white font-mono">{diagnostics.swRegistered}</span>
+              </div>
+              <div className="flex justify-between p-3 rounded-xl bg-black/30 border border-white/5">
+                <span className="text-white/50 font-bold uppercase tracking-wider">APNs Subscription:</span>
+                <span className={`font-bold ${diagnostics.subscriptionActive === "active" ? "text-green-400" : "text-amber-400"}`}>
+                  {diagnostics.subscriptionActive}
+                </span>
+              </div>
+            </div>
+
+            {diagnostics.endpoint && (
+              <div className="p-3 rounded-xl bg-black/30 border border-white/5 space-y-1">
+                <div className="text-[10px] font-black uppercase text-white/50 tracking-wider">Apple Push Endpoint URL:</div>
+                <div className="text-xs font-mono text-purple-300 break-all select-all">{diagnostics.endpoint}</div>
+              </div>
+            )}
+
+            {diagnostics.error && (
+              <div className="p-3 rounded-xl bg-red-950/30 border border-red-500/20 text-red-400 space-y-1">
+                <div className="text-[10px] font-black uppercase tracking-wider">Error Encountered:</div>
+                <div className="text-xs font-mono break-all">{diagnostics.error}</div>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2">
+              <Button 
+                onClick={fetchDiagnostics}
+                className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 font-bold text-xs uppercase tracking-wide px-4 py-2 rounded-xl border border-purple-500/10"
+              >
+                Refresh Status
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
