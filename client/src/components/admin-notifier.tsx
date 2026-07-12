@@ -376,6 +376,19 @@ export function AdminNotifier() {
 
     socket.emit("join-admin-calls");
 
+    // Force socket reconnect/refresh when resuming PWA from background on iOS
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[SOCKET] App visible. Checking socket connection...');
+        if (!socket.connected) {
+          socket.connect();
+        } else {
+          socket.emit("join-admin-calls");
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     socket.on("incoming-call", (data: { from: string; offer: any; callerName: string; callerId: string }) => {
       setIncomingCall(data);
       startRingtone();
@@ -559,6 +572,7 @@ export function AdminNotifier() {
 
     return () => {
       socket.disconnect();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('trigger-push-setup', handleTrigger);
       window.removeEventListener("start-admin-call", handleStartCallEvent);
       
