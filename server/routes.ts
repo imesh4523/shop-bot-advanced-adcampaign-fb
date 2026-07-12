@@ -455,21 +455,55 @@ export async function registerRoutes(
   initForwardService(io);
 
   // WebRTC Audio Call Signalling
+  const activeRingingCalls = new Map<string, { callerSocketId: string; offer: any; callerName: string; callerId: string }>();
+
   io.on("connection", (socket) => {
     socket.on("join-admin-calls", () => {
       socket.join("admins");
+      
+      // Immediate resend of active calls for new socket connection (e.g. following push redirect)
+      activeRingingCalls.forEach((call) => {
+        socket.emit("incoming-call", {
+          from: call.callerSocketId,
+          offer: call.offer,
+          callerName: call.callerName,
+          callerId: call.callerId
+        });
+      });
     });
 
     socket.on("call-user", (data: { offer: any; callerName: string; callerId: string }) => {
+      activeRingingCalls.set(socket.id, {
+        callerSocketId: socket.id,
+        offer: data.offer,
+        callerName: data.callerName,
+        callerId: data.callerId
+      });
+
       socket.to("admins").emit("incoming-call", {
         from: socket.id,
         offer: data.offer,
         callerName: data.callerName,
         callerId: data.callerId
       });
+
+      // Dispatch Web Push Notification redirecting to Support page
+      sendAdminPushNotification(
+        "Incoming Support Call",
+        `Voice call from ${data.callerName}`,
+        "/main-admin/support"
+      ).catch((err) => console.error("Error sending Web Push notification for call:", err));
     });
 
+    const handleCallCleanup = () => {
+      if (activeRingingCalls.has(socket.id)) {
+        activeRingingCalls.delete(socket.id);
+        socket.to("admins").emit("call-ended", { from: socket.id });
+      }
+    };
+
     socket.on("accept-call", (data: { to: string; answer: any }) => {
+      activeRingingCalls.delete(data.to);
       io.to(data.to).emit("call-accepted", {
         answer: data.answer,
         from: socket.id
@@ -477,12 +511,16 @@ export async function registerRoutes(
     });
 
     socket.on("reject-call", (data: { to: string }) => {
+      activeRingingCalls.delete(data.to);
       io.to(data.to).emit("call-rejected", {
         from: socket.id
       });
     });
 
     socket.on("end-call", (data: { to: string }) => {
+      activeRingingCalls.delete(data.to);
+      activeRingingCalls.delete(socket.id);
+      
       io.to(data.to).emit("call-ended", {
         from: socket.id
       });
@@ -500,6 +538,10 @@ export async function registerRoutes(
         isMuted: data.isMuted,
         from: socket.id
       });
+    });
+
+    socket.on("disconnect", () => {
+      handleCallCleanup();
     });
   });
 

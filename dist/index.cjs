@@ -95874,30 +95874,60 @@ async function registerRoutes(httpServer2, app2, io2) {
   });
   initTelegramClientService(io2);
   initForwardService(io2);
+  const activeRingingCalls = /* @__PURE__ */ new Map();
   io2.on("connection", (socket) => {
     socket.on("join-admin-calls", () => {
       socket.join("admins");
+      activeRingingCalls.forEach((call) => {
+        socket.emit("incoming-call", {
+          from: call.callerSocketId,
+          offer: call.offer,
+          callerName: call.callerName,
+          callerId: call.callerId
+        });
+      });
     });
     socket.on("call-user", (data) => {
+      activeRingingCalls.set(socket.id, {
+        callerSocketId: socket.id,
+        offer: data.offer,
+        callerName: data.callerName,
+        callerId: data.callerId
+      });
       socket.to("admins").emit("incoming-call", {
         from: socket.id,
         offer: data.offer,
         callerName: data.callerName,
         callerId: data.callerId
       });
+      sendAdminPushNotification(
+        "Incoming Support Call",
+        `Voice call from ${data.callerName}`,
+        "/main-admin/support"
+      ).catch((err) => console.error("Error sending Web Push notification for call:", err));
     });
+    const handleCallCleanup = () => {
+      if (activeRingingCalls.has(socket.id)) {
+        activeRingingCalls.delete(socket.id);
+        socket.to("admins").emit("call-ended", { from: socket.id });
+      }
+    };
     socket.on("accept-call", (data) => {
+      activeRingingCalls.delete(data.to);
       io2.to(data.to).emit("call-accepted", {
         answer: data.answer,
         from: socket.id
       });
     });
     socket.on("reject-call", (data) => {
+      activeRingingCalls.delete(data.to);
       io2.to(data.to).emit("call-rejected", {
         from: socket.id
       });
     });
     socket.on("end-call", (data) => {
+      activeRingingCalls.delete(data.to);
+      activeRingingCalls.delete(socket.id);
       io2.to(data.to).emit("call-ended", {
         from: socket.id
       });
@@ -95913,6 +95943,9 @@ async function registerRoutes(httpServer2, app2, io2) {
         isMuted: data.isMuted,
         from: socket.id
       });
+    });
+    socket.on("disconnect", () => {
+      handleCallCleanup();
     });
   });
   const sessionTtl = 7 * 24 * 60 * 60 * 1e3;
