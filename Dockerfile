@@ -1,3 +1,19 @@
+# --- Build Stage ---
+FROM node:20-slim AS builder
+
+WORKDIR /app
+
+# Copy package files and install all dependencies (including devDependencies needed for build)
+COPY package*.json ./
+RUN npm install
+
+# Copy all source files and configs
+COPY . .
+
+# Run the build script (runs esbuild & vite, generating dist/)
+RUN npm run build
+
+# --- Production Stage ---
 FROM node:20-slim
 
 # Install PostgreSQL 17 client
@@ -13,9 +29,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --production
 
-# Copy pre-built dist and public assets (build done locally, no OOM risk)
-COPY dist/ ./dist/
-COPY public/ ./public/
+# Copy built assets from builder stage
+COPY --from=builder /app/dist/ ./dist/
+COPY --from=builder /app/public/ ./public/
 
 # Set production environment
 ENV NODE_ENV=production
