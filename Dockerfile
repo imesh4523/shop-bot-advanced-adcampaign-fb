@@ -35,9 +35,10 @@ COPY --from=builder /app/public/ ./public/
 
 # Set production environment
 ENV NODE_ENV=production
+ENV PORT=8080
 
 # Expose the API port
-EXPOSE 5000
+EXPOSE 8080
 
 # Start the application directly with node (no npm run start)
 CMD ["node", "dist/index.cjs"]
