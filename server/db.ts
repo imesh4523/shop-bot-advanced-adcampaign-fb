@@ -12,6 +12,7 @@ if (!process.env.DATABASE_URL) {
 
 
 const isLocalhost = process.env.DATABASE_URL.includes("localhost") || process.env.DATABASE_URL.includes("127.0.0.1");
+const hasSslDisabled = process.env.PGSSLMODE === "disable" || process.env.DATABASE_SSL === "false";
 
 let connectionString = process.env.DATABASE_URL;
 if (!isLocalhost) {
@@ -23,7 +24,7 @@ if (!isLocalhost) {
 
 export const pool = new Pool({ 
   connectionString,
-  ssl: isLocalhost ? false : {
+  ssl: (isLocalhost || hasSslDisabled) ? false : {
     rejectUnauthorized: false
   }
 });

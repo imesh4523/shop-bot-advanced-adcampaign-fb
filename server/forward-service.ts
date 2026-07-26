@@ -145,6 +145,8 @@ export async function syncGroupsManually() {
   }
 }
 
+const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
 /**
  * Runs a single tick of the forwarding job.
  */
@@ -199,6 +201,9 @@ async function performForwardJob() {
     } catch (err: any) {
       log(`Failed to forward via Bot to group ${group.groupName}: ${err.message || err}`, "telegram-forward");
     }
+    
+    // Add 1.5s delay between messages to respect Telegram rate-limits (max 30/sec across groups, max 20/min to same group)
+    await sleep(1500);
   }
 
   await saveDetectedGroups(updatedGroups);
@@ -252,6 +257,9 @@ export async function testForwardMessage(): Promise<{ success: boolean; totalGro
       errors.push(`${group.groupName}: ${err.message || err}`);
       log(`[TEST] Bot forward failed to group ${group.groupName}: ${err.message || err}`, "telegram-forward");
     }
+    
+    // Add 1.5s delay between messages to respect Telegram rate-limits (max 30/sec across groups, max 20/min to same group)
+    await sleep(1500);
   }
 
   await saveDetectedGroups(updatedGroups);
